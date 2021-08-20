@@ -1,0 +1,18 @@
+{
+	"folders": [
+		{
+			"name": "include",
+			"path": "include"
+		},
+		{
+			"name": "AimTrainer",
+			"path": "AimTrainer"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"string": "cpp",
+			"iosfwd": "cpp"
+		}
+	}
+}
