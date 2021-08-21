@@ -5,10 +5,12 @@
 *.slo
 *.lo
 *.o
-*.obj
+#*.obj
 *.ilk
 *.lib
 *.exp
+main.obj
+glad.obj
 
 # Debug symbols
 *.pdb
@@ -55,3 +57,5 @@ Icon
 Network Trash Folder
 Temporary Items
 .apdisk
+
+libs

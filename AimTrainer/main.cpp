@@ -21,6 +21,8 @@
     #error windows.h was included!
 #endif
 
+#include <cstdlib>
+
 // classes developed during lab lectures to manage shaders, to load models, for FPS camera, and for physical simulation
 #include <utils/shader_v1.h>
 #include <utils/model_v1.h>
@@ -48,6 +50,9 @@ void apply_camera_movements();
 
 // we initialize an array of booleans for each keybord key
 bool keys[1024];
+
+//number of walls (useful to avoid certain controls on collisions)
+GLint walls_number = 4;
 
 // we need to store the previous mouse position to calculate the offset with the current frame
 GLfloat lastX, lastY;
@@ -91,6 +96,10 @@ GLfloat shootColor[] = {1.0f,1.0f,0.0f};
 // dimension of the bullets (global because we need it also in the keyboard callback)
 glm::vec3 sphere_size = glm::vec3(0.2f, 0.2f, 0.2f);
 glm::vec3 projectile_size = glm::vec3(0.1f,0.1f,0.1f);
+
+//active target array
+GLboolean active_targets [49] = {false};
+GLboolean active = true;
 
 // instance of the physics class
 Physics bulletSimulation;
@@ -183,26 +192,26 @@ int main()
     // we create 25 rigid bodies for the cubes of the scene. In this case, we use BoxShape, with the same dimensions of the cubes, as collision shape of Bullet. For more complex cases, a Bounding Box of the model may have to be calculated, and its dimensions to be passed to the physics library
     GLint num_side = 7;
     // total number of the cubes
-    GLint total_cubes = num_side*num_side;
+    GLint total_targets = num_side*num_side;
     GLint i,j;
     // position of the cube
-    glm::vec3 cube_pos;
+    glm::vec3 target_pos;
     // dimension of the cube
-    glm::vec3 cube_size = glm::vec3(0.2f, 0.5f, 0.2f);
+    glm::vec3 target_size = glm::vec3(0.2f, 0.5f, 0.2f);
     // we set a small initial rotation for the cubes
-    glm::vec3 cube_rot = glm::vec3(0.1f, 0.0f, 0.1f);
+    glm::vec3 target_rot = glm::vec3(0.1f, 0.0f, 0.1f);
     // rigid body
-    btRigidBody* cube;
+    btRigidBody* target;
 
-    // we create a 5x5 grid of rigid bodies
+
     for(i = 0; i < num_side; i++ )
     {
         for(j = 0; j < num_side; j++ )
         {
             // position of each cube in the grid (we add 3 to x to have a bigger displacement)
-            cube_pos = glm::vec3((num_side - j*0.5f)-5.5f, (num_side - i*0.5f)-4.5f, 0.7f);
+            target_pos = glm::vec3((num_side - j*0.5f)-5.5f, (num_side - i*0.5f)-4.5f, 0.7f);
             // we create a rigid body (in this case, a dynamic body, with mass = 2)
-            cube = bulletSimulation.createRigidBody(SPHERE,cube_pos,cube_size,cube_rot,0.0f,0.3f,0.3f);
+            target = bulletSimulation.createRigidBody(SPHERE,target_pos,target_size,target_rot,0.0f,0.3f,0.3f);
 
         }
     }
@@ -343,8 +352,6 @@ int main()
       cubeModel.Draw();
       bwallModelMatrix = glm::mat4(1.0f);
 
-      GLint walls_number = 4;
-
       /////
       // DYNAMIC OBJECTS (FALLING CUBES + BULLETS)
       // array of 16 floats = "native" matrix of OpenGL. We need it as an intermediate data structure to "convert" the Bullet matrix to a GLM matrix
@@ -358,27 +365,26 @@ int main()
       // we ask Bullet to provide the total number of Rigid Bodies in the scene
       int num_cobjs = bulletSimulation.dynamicsWorld->getNumCollisionObjects();
 
+      //randomizer
+      if(active){
+        active_targets[(rand()%49)]=true;
+        active=false;
+        //cout << rand()%49;
+      }
+
       // we cycle among all the Rigid Bodies (starting from 1 to avoid the plane)
-      for (i=4; i<num_cobjs;i++)
+      for (i=walls_number; i<num_cobjs;i++)
       {
           // the first 25 objects are the falling cubes
-          if (i <= (total_cubes+walls_number))
+          if (active_targets[i-walls_number])
           {
               // we point objectModel to the cube
               objectModel = &sphereModel;
               obj_size = sphere_size;
               // we pass red color to the shader
               glUniform3fv(objDiffuseLocation, 1, diffuseColor);
-          }
-          // over 26, there are bullets (if any)
-          else
-          {
-            // we point objectModel to the sphere
-              objectModel = &sphereModel;
-              obj_size = projectile_size;
-              // we pass yellow color to the shader
-              glUniform3fv(objDiffuseLocation, 1, shootColor);
-          }
+          
+          
 
           // we take the Collision Object from the list
           btCollisionObject* obj = bulletSimulation.dynamicsWorld->getCollisionObjectArray()[i];
@@ -411,6 +417,7 @@ int main()
           objectModel->Draw();
           // we "reset" the matrix
           objModelMatrix = glm::mat4(1.0f);
+          }
       }
 
       // Faccio lo swap tra back e front buffer
@@ -425,6 +432,16 @@ int main()
   // we close and delete the created context
   glfwTerminate();
   return 0;
+}
+
+//ray casting 
+bool hit_sphere(const glm::vec3& center, float radius, const glm::vec3& origin){
+    glm::vec3 oc = origin - center;
+    float a = dot(camera.Front, camera.Front);
+    float b = 2.0 * dot(oc, camera.Front);
+    float c = dot(oc,oc) - radius*radius;
+    float discriminant = b*b - 4*a*c;
+    return (discriminant>0);
 }
 
 //////////////////////////////////////////
@@ -472,7 +489,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     // if space is pressed
     if(key == GLFW_KEY_SPACE && action == GLFW_PRESS)
     {
-        // we create a Rigid Body with mass = 1
+        /*// we create a Rigid Body with mass = 1
         sphere = bulletSimulation.createRigidBody(SPHERE,camera.Position,projectile_size,rot,0.1f,0.1f,0.3f);
 
         // we must retro-project the coordinates of the mouse pointer, in order to have a point in world coordinate to be used to determine a vector from the camera (= direction and orientation of the bullet)
@@ -494,6 +511,26 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         // N.B.) the graphical aspect of the bullet is treated in the rendering loop
         impulse = btVector3(shoot.x, shoot.y, shoot.z);
         sphere->applyCentralImpulse(impulse);
+        */
+        
+        btVector3 temp(0.0f,0.0f,0.0f);
+        btScalar radius;
+        int num_cobjs = bulletSimulation.dynamicsWorld->getNumCollisionObjects();
+        for(int i=walls_number; i<(walls_number+7*7); i++){
+            btCollisionObject* obj = bulletSimulation.dynamicsWorld->getCollisionObjectArray()[i];
+            btCollisionShape* shape = obj->getCollisionShape();
+            shape->getBoundingSphere(temp, radius);
+            glm::vec3 center (obj->getWorldTransform().getOrigin().getX(),obj->getWorldTransform().getOrigin().getY(),obj->getWorldTransform().getOrigin().getZ());
+            if (hit_sphere(center, radius, camera.Position)){
+                cout<< "Colpita sfera " << i <<endl;
+                if(active_targets[i-walls_number]){
+                    active_targets[i-walls_number]=false;
+                    active=true;
+                }
+            }
+
+        }
+        
     }
 
     // we keep trace of the pressed keys
