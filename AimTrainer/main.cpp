@@ -45,6 +45,7 @@ GLuint screenWidth = 1920, screenHeight = 1080;
 // callback functions for keyboard and mouse events
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 // if one of the WASD keys is pressed, we call the corresponding method of the Camera class
 void apply_camera_movements();
 
@@ -74,7 +75,7 @@ GLboolean wireframe = GL_FALSE;
 glm::mat4 view, projection;
 
 // we create a camera. We pass the initial position as a parameter to the constructor. In this case, we use a "floating" camera (we pass false as last parameter)
-Camera camera(glm::vec3(0.0f, 0.0f, 9.0f), GL_FALSE);
+Camera camera(glm::vec3(0.0f, 0.0f, 9.0f), GL_TRUE);
 
 // Uniforms to be passed to shaders
 // point light position
@@ -134,6 +135,7 @@ int main()
     // we put in relation the window and the callbacks
     glfwSetKeyCallback(window, key_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
+    glfwSetMouseButtonCallback(window,mouse_button_callback);
 
     // we disable the mouse cursor
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -155,6 +157,9 @@ int main()
 
     //the "clear" color for the frame buffer
     glClearColor(0.26f, 0.46f, 0.98f, 1.0f);
+
+    //seed for randomizer
+    srand(time(0));
 
     // the Shader Program for the objects used in the application
     Shader object_shader = Shader("09_illumination_models.vert", "10_illumination_models.frag");
@@ -188,6 +193,12 @@ int main()
     btRigidBody* rwall = bulletSimulation.createRigidBody(BOX,rwall_pos,rwall_size,rwall_rot,0.0f,0.3f,0.3f);
     btRigidBody* lwall = bulletSimulation.createRigidBody(BOX,lwall_pos,lwall_size,lwall_rot,0.0f,0.3f,0.3f);
     btRigidBody* bwall = bulletSimulation.createRigidBody(BOX,bwall_pos,bwall_size,bwall_rot,0.0f,0.3f,0.3f);
+
+    //crosshair parameters
+    glm::vec3 cross_pos;
+    glm::vec3 cross_size = glm::vec3(0.005f, 0.001f, 0.0f);
+    glm::mat4 crossModelMatrix = glm::mat4(1.0f);
+    glm::mat3 crossNormalMatrix = glm::mat3(1.0f);
 
     // we create 25 rigid bodies for the cubes of the scene. In this case, we use BoxShape, with the same dimensions of the cubes, as collision shape of Bullet. For more complex cases, a Bounding Box of the model may have to be calculated, and its dimensions to be passed to the physics library
     GLint num_side = 7;
@@ -369,7 +380,6 @@ int main()
       if(active){
         active_targets[(rand()%49)]=true;
         active=false;
-        //cout << rand()%49;
       }
 
       // we cycle among all the Rigid Bodies (starting from 1 to avoid the plane)
@@ -419,6 +429,40 @@ int main()
           objModelMatrix = glm::mat4(1.0f);
           }
       }
+
+      // We search inside the Shader Program the name of a subroutine, and we get the numerical index
+      index = glGetSubroutineIndex(object_shader.Program, GL_FRAGMENT_SHADER, "Crosshair");
+      // we activate the subroutine using the index
+      glUniformSubroutinesuiv( GL_FRAGMENT_SHADER, 1, &index);
+    
+      //horizontal part of the Crosshair 
+      crossModelMatrix = glm::mat4(1.0f);
+      crossNormalMatrix = glm::mat3(1.0f);
+      crossModelMatrix = glm::translate(crossModelMatrix, (camera.Front*0.5f));
+      crossModelMatrix = crossModelMatrix*glm::inverse(camera.GetViewMatrix());
+      crossModelMatrix = glm::scale(crossModelMatrix, cross_size);
+      crossNormalMatrix = glm::inverseTranspose(glm::mat3(view*crossModelMatrix));
+      glUniformMatrix4fv(glGetUniformLocation(object_shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(crossModelMatrix));
+      glUniformMatrix3fv(glGetUniformLocation(object_shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(crossNormalMatrix));
+
+      // we render the plane
+      cubeModel.Draw();
+      crossModelMatrix = glm::mat4(1.0f);
+
+      //vertical part of the Crosshair
+      crossModelMatrix = glm::mat4(1.0f);
+      crossNormalMatrix = glm::mat3(1.0f);
+      crossModelMatrix = glm::translate(crossModelMatrix, (camera.Front*0.5f));
+      crossModelMatrix = crossModelMatrix*glm::inverse(camera.GetViewMatrix());
+      crossModelMatrix = glm::rotate(crossModelMatrix,glm::radians(90.0f),glm::vec3(0.0f,0.0f,1.0f));
+      crossModelMatrix = glm::scale(crossModelMatrix, cross_size);
+      crossNormalMatrix = glm::inverseTranspose(glm::mat3(view*crossModelMatrix));
+      glUniformMatrix4fv(glGetUniformLocation(object_shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(crossModelMatrix));
+      glUniformMatrix3fv(glGetUniformLocation(object_shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(crossNormalMatrix));
+
+      // we render the plane
+      cubeModel.Draw();
+      crossModelMatrix = glm::mat4(1.0f);
 
       // Faccio lo swap tra back e front buffer
       glfwSwapBuffers(window);
@@ -470,68 +514,13 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     if(key == GLFW_KEY_L && action == GLFW_PRESS)
         wireframe=!wireframe;
 
-    ///////
-    /// BULLET MANAGEMENT (SPACE KEY)
-    // if space is pressed, we "shoot" a bullet in the scene
-    // the initial trajectory of the bullet is given by a vector from the position of the camera to the mouse cursor position, which must be converted from Viewport Coordinates back to World Coordinate
+    // if L is pressed, we activate/deactivate wireframe rendering of models
+    if(key == GLFW_KEY_UP && action == GLFW_PRESS)
+        camera.IncreaseCameraSensitivity();
 
-    btVector3 impulse;
-    // we need a initial rotation, even if useless for a sphere
-    glm::vec3 rot = glm::vec3(0.0f, 0.0f, 0.0f);
-    glm::vec4 shoot;
-    // initial velocity of the bullet
-    GLfloat shootInitialSpeed = 15.0f;
-    // rigid body of the bullet
-    btRigidBody* sphere;
-    // matrix for the inverse matrix of view and projection
-    glm::mat4 unproject;
-
-    // if space is pressed
-    if(key == GLFW_KEY_SPACE && action == GLFW_PRESS)
-    {
-        /*// we create a Rigid Body with mass = 1
-        sphere = bulletSimulation.createRigidBody(SPHERE,camera.Position,projectile_size,rot,0.1f,0.1f,0.3f);
-
-        // we must retro-project the coordinates of the mouse pointer, in order to have a point in world coordinate to be used to determine a vector from the camera (= direction and orientation of the bullet)
-        // we convert the cursor position (taken from the mouse callback) from Viewport Coordinates to Normalized Device Coordinate (= [-1,1] in both coordinates)
-        shoot.x = 0.0f;//camera.Position.x; //((screenWidth/2)/screenWidth) * 2.0f - 1.0f;
-        shoot.y = 0.0f;//camera.Position.y;//-((screenHeight/2)/screenHeight) * 2.0f + 1.0f; // Viewport Y coordinates are from top-left corner to the bottom
-        // we need a 3D point, so we set a minimum value to the depth with respect to camera position
-        shoot.z = 1.0f;
-        // w = 1.0 because we are using homogeneous coordinates
-        shoot.w = 1.0f;
-
-        // we determine the inverse matrix for the projection and view transformations
-        unproject = glm::inverse(projection * view);
-
-        // we convert the position of the cursor from NDC to world coordinates, and we multiply the vector by the initial speed
-        shoot = glm::normalize(unproject * shoot) * shootInitialSpeed;
-
-        // we apply the impulse and shoot the bullet in the scene
-        // N.B.) the graphical aspect of the bullet is treated in the rendering loop
-        impulse = btVector3(shoot.x, shoot.y, shoot.z);
-        sphere->applyCentralImpulse(impulse);
-        */
-        
-        btVector3 temp(0.0f,0.0f,0.0f);
-        btScalar radius;
-        int num_cobjs = bulletSimulation.dynamicsWorld->getNumCollisionObjects();
-        for(int i=walls_number; i<(walls_number+7*7); i++){
-            btCollisionObject* obj = bulletSimulation.dynamicsWorld->getCollisionObjectArray()[i];
-            btCollisionShape* shape = obj->getCollisionShape();
-            shape->getBoundingSphere(temp, radius);
-            glm::vec3 center (obj->getWorldTransform().getOrigin().getX(),obj->getWorldTransform().getOrigin().getY(),obj->getWorldTransform().getOrigin().getZ());
-            if (hit_sphere(center, radius, camera.Position)){
-                cout<< "Colpita sfera " << i <<endl;
-                if(active_targets[i-walls_number]){
-                    active_targets[i-walls_number]=false;
-                    active=true;
-                }
-            }
-
-        }
-        
-    }
+    // if L is pressed, we activate/deactivate wireframe rendering of models
+    if(key == GLFW_KEY_DOWN && action == GLFW_PRESS)
+        camera.DecreaseCameraSensitivity();
 
     // we keep trace of the pressed keys
     // with this method, we can manage 2 keys pressed at the same time:
@@ -573,4 +562,28 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
     // we pass the offset to the Camera class instance in order to update the rendering
     camera.ProcessMouseMovement(xoffset, yoffset);
 
+}
+
+//callback for mouse click 
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS){
+        btVector3 temp(0.0f,0.0f,0.0f);
+        btScalar radius;
+        int num_cobjs = bulletSimulation.dynamicsWorld->getNumCollisionObjects();
+        for(int i=walls_number; i<(walls_number+7*7); i++){
+            btCollisionObject* obj = bulletSimulation.dynamicsWorld->getCollisionObjectArray()[i];
+            btCollisionShape* shape = obj->getCollisionShape();
+            shape->getBoundingSphere(temp, radius);
+            glm::vec3 center (obj->getWorldTransform().getOrigin().getX(),obj->getWorldTransform().getOrigin().getY(),obj->getWorldTransform().getOrigin().getZ());
+            if (hit_sphere(center, radius, camera.Position)){
+                cout<< "Colpita sfera " << i <<endl;
+                if(active_targets[i-walls_number]){
+                    active_targets[i-walls_number]=false;
+                    active=true;
+                }
+            }
+        }
+    }
+        
 }

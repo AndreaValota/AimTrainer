@@ -33,7 +33,7 @@ const GLfloat PITCH      =  0.0f; //X
 
 // parameters to manage mouse movement
 const GLfloat SPEED      =  3.0f;
-const GLfloat SENSITIVITY =  0.25f;
+const GLfloat SENSITIVITY =  0.05f;
 
 ///////////////////  CAMERA class ///////////////////////
 class Camera
@@ -66,6 +66,20 @@ public:
         this->updateCameraVectors();
     }
 
+    //Method used to increase the mouse sensitivity
+    void IncreaseCameraSensitivity(){
+            MouseSensitivity += 0.02f;
+            cout<< MouseSensitivity <<endl;
+    }
+
+    //Method used to increase the mouse sensitivity
+    void DecreaseCameraSensitivity(){
+        if((MouseSensitivity - 0.02f)>=0.01f){
+            MouseSensitivity -= 0.02f;
+            cout<< MouseSensitivity <<endl;
+        }
+    }
+    
     //////////////////////////////////////////
     // it returns the current view matrix
     glm::mat4 GetViewMatrix()

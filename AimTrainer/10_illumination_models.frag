@@ -231,6 +231,13 @@ vec3 GGX() // this name is the one which is detected by the SetupShaders() funct
 }
 //////////////////////////////////////////
 
+subroutine(ill_model)
+vec3 Crosshair() // this name is the one which is detected by the SetupShaders() function in the main application, and the one used to swap subroutines
+{
+    return vec3(1.0f,1.0f,1.0f);
+}
+//////////////////////////////////////////
+
 // main
 void main(void)
 {
