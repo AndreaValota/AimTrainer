@@ -7,6 +7,16 @@
 		{
 			"name": "AimTrainer",
 			"path": "AimTrainer"
+		},
+		{
+			"name": "textures",
+			"path": "textures"
+		},{
+			"name": "models",
+			"path": "models"
+		},{
+			"name": "libs",
+			"path": "libs"
 		}
 	],
 	"settings": {
