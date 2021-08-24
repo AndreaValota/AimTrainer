@@ -1,20 +1,4 @@
-/*
 
-22_ggx_tex_shadow.frag: fragment shader for GGX illumination model, with shadow rendering using shadow map
-
-N.B. 1)  "21_ggx_tex_shadow.vert" must be used as vertex shader
-
-N.B. 2) the shader considers only a directional light (simpler to manage for the creation of the shadow map). For more lights, of different kind, the shader must be modified to consider each case
-
-N.B. 3)  the different effects are implemented using Shaders Subroutines
-
-author: Davide Gadia
-
-Real-Time Graphics Programming - a.a. 2020/2021
-Master degree in Computer Science
-Universita' degli Studi di Milano
-
-*/
 #version 410 core
 
 const float PI = 3.14159265359;
@@ -29,6 +13,9 @@ in vec3 vNormal;
 // vector from fragment to camera (in view coordinate)
 in vec3 vViewPosition;
 
+//TBN matrix used for normal maps
+in mat3 TBN;
+
 // interpolated texture coordinates
 in vec2 interp_UV;
 
@@ -42,11 +29,18 @@ uniform float repeat;
 uniform sampler2D tex;
 // texture sampler for the depth map
 uniform sampler2D shadowMap;
+// normal map sampler
+uniform sampler2D normalMap;
 
 uniform float alpha; // rugosity - 0 : smooth, 1: rough
 uniform float F0; // fresnel reflectance at normal incidence
 uniform float Kd; // weight of diffuse reflection
 
+//activates the normal maps
+uniform bool normalMapping;
+
+//value needed to activet target specific behaviour
+uniform bool isTarget;
 
 ////////////////////////////////////////////////////////////////////
 
@@ -57,52 +51,6 @@ subroutine float shadow_map();
 subroutine uniform shadow_map Shadow_Calculation;
 
 ////////////////////////////////////////////////////////////////////
-
-//////////////////////////////////////////
-// it applies a very basic shadow mapping. The final result is heavily aliased (with a lot of "shadow acne"), and the areas outside the light frustum are rendered as in shadow
-subroutine(shadow_map)
-float Shadow_Acne() // this name is the one which is detected by the SetupShaders() function in the main application, and the one used to swap subroutines
-{
-    // given the fragment position in light coordinates, we apply the perspective divide. Usually, perspective divide is applied in an automatic way to the coordinates saved in the gl_Position variable. In this case, the vertex position in light coordinates has been saved in a separate variable, so we need to do it manually
-    vec3 projCoords = posLightSpace.xyz / posLightSpace.w;
-    // after the perspective divide the values are in the range [-1,1]: we must convert them in [0,1]
-    projCoords = projCoords * 0.5 + 0.5;
-    // we sample the shadow map, considering the closer depth value from the point of view of the light
-    float closestDepth = texture(shadowMap, projCoords.xy).r;
-    // we get the depth of current fragment from light's perspective
-    float currentDepth = projCoords.z;
-
-    // Version 1: if the depth of the current fragment is greater than the depth in the shadow map, then the fragment is in shadow
-    // -> A LOT OF ALIASING/SHADOW ACNE
-    float shadow = currentDepth > closestDepth  ? 1.0 : 0.0;
-
-    return shadow;
-}
-
-//////////////////////////////////////////
-// it applies an adaptive bias to the depth test, in order to eliminate the "shadow acne"
-subroutine(shadow_map)
-float Shadow_Bias() // this name is the one which is detected by the SetupShaders() function in the main application, and the one used to swap subroutines
-{
-    // given the fragment position in light coordinates, we apply the perspective divide. Usually, perspective divide is applied in an automatic way to the coordinates saved in the gl_Position variable. In this case, the vertex position in light coordinates has been saved in a separate variable, so we need to do it manually
-    vec3 projCoords = posLightSpace.xyz / posLightSpace.w;
-    // after the perspective divide the values are in the range [-1,1]: we must convert them in [0,1]
-    projCoords = projCoords * 0.5 + 0.5;
-    // we sample the shadow map, considering the closer depth value from the point of view of the light
-    float closestDepth = texture(shadowMap, projCoords.xy).r;
-    // we get the depth of current fragment from light's perspective
-    float currentDepth = projCoords.z;
-
-    // Version 2: we calculate an adaptive bias to apply to the currentDepth value, to avoid the shadow acne effect.
-    // the bias value is in the range [0.005,0.05]: the final value is calculated considering the angle between the normal and the direction of light
-    vec3 normal = normalize(vNormal);
-    float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005);
-
-    // if the depth (with bias) of the current fragment is greater than the depth in the shadow map, then the fragment is in shadow
-    float shadow = currentDepth - bias > closestDepth  ? 1.0 : 0.0;
-
-    return shadow;
-}
 
 //////////////////////////////////////////
 // it applies Percentage-Closer Filtering to smooth the shadow edged. Moreover, the rendering of the areas behind the far plane of the light frustum is corrected
@@ -170,8 +118,16 @@ void main()
     vec2 repeated_Uv = mod(interp_UV*repeat, 1.0);
     vec4 surfaceColor = texture(tex, repeated_Uv);
 
-    // normalization of the per-fragment normal
-    vec3 N = normalize(vNormal);
+    vec3 N;
+    if(normalMapping){
+        N = texture(normalMap, repeated_Uv).rgb;
+        N = N * 2.0 - 1.0;
+        N = normalize(TBN * N);
+    }
+    else{
+        // normalization of the per-fragment normal
+        N = normalize(vNormal);
+    }
     // normalization of the per-fragment light incidence direction
     vec3 L = normalize(lightDir.xyz);
 
@@ -234,6 +190,15 @@ void main()
        //        shadow value = 0 -> fragment is in light
     // Therefore, we use (1-shadow) as weight to apply to the illumination model
     vec3 finalColor = (1.0 - (shadow*0.7))*(lambert + specular)*NdotL;
+
+    if(NdotL==0.0){
+        finalColor = 0.1*(lambert);
+    }
+
+    if(isTarget){
+        finalColor = (lambert + specular)*NdotL;
+        finalColor += vec3(0.1f,0.1f,0.3f);
+    }
 
     colorFrag = vec4(finalColor, 1.0);
 }

@@ -9,6 +9,7 @@
 *.ilk
 *.lib
 *.exp
+*.bat
 main.obj
 glad.obj
 
@@ -58,3 +59,4 @@ Network Trash Folder
 Temporary Items
 .apdisk
 libs
+.vscode

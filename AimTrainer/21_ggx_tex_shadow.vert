@@ -18,6 +18,10 @@ layout (location = 0) in vec3 position;
 layout (location = 1) in vec3 normal;
 // UV coordinates
 layout (location = 2) in vec2 UV;
+// tangent vector
+layout (location = 3) in vec3 tangent;
+// bitangent vector
+layout (location = 4) in vec3 bitangent;
 // the numbers used for the location in the layout qualifier are the positions of the vertex attribute
 // as defined in the Mesh class
 
@@ -42,6 +46,9 @@ out vec3 lightDir;
 // normals in view coordinates
 out vec3 vNormal;
 
+//TBN matrix used for normal maps
+out mat3 TBN;
+
 // in the fragment shader, we need to calculate also the reflection vector for each fragment
 // to do this, we need to calculate in the vertex shader the view direction (in view coordinates) for each vertex, and to have it interpolated for each fragment by the rasterization stage
 out vec3 vViewPosition;
@@ -65,6 +72,12 @@ void main(){
 
   // transformations are applied to the normal
   vNormal = normalize( normalMatrix * normal );
+
+  //computing the TBN matrix
+  vec3 T = normalize( normalMatrix * tangent);
+  vec3 B = normalize( normalMatrix * bitangent);
+  vec3 N = normalize( normalMatrix * normal);
+  TBN = mat3(T,B,N);
 
   // light incidence directions in view coordinate
   lightDir = vec3(viewMatrix  * vec4(lightVector, 0.0));

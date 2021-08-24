@@ -66,6 +66,12 @@ void PrintCurrentShader(int subroutine);
 // in this application, we have isolated the models rendering using a function, which will be called in each rendering step
 void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint render_pass, GLuint depthMap);
 
+//texture inizialization
+void SetupTexture();
+
+//activate texture ad index i (each texture needs color and normal map at index i+1)
+void ActivateTexture(GLint index, GLfloat repeat, GLint textureLocation, GLint nMapLocation, GLint repeatLocation);
+
 // load image from disk and create an OpenGL texture
 GLint LoadTexture(const char* path);
 
@@ -154,7 +160,7 @@ glm::vec3 lwall_size = glm::vec3(4.0f, 0.4f, 4.0f);
 glm::vec3 lwall_rot = glm::vec3(0.0f, 0.0f, 1.0f);
     
 glm::vec3 bwall_pos = glm::vec3(0.0f, 3.0f, -3.6f);
-glm::vec3 bwall_size = glm::vec3(4.2f, 0.4f, 4.0f);
+glm::vec3 bwall_size = glm::vec3(4.0f, 0.4f, 4.2f);
 glm::vec3 bwall_rot = glm::vec3(1.0f, 0.0f, 0.0f);
 
 GLint objDiffuseLocation;
@@ -232,9 +238,15 @@ int main()
     PrintCurrentShader(current_subroutine);
 
     // we load the images and store them in a vector
-    textureID.push_back(LoadTexture("../textures/UV_Grid_Sm.png"));
-    textureID.push_back(LoadTexture("../textures/SoilCracked.png"));
-    
+    textureID.push_back(LoadTexture("../textures/Ground_Dirt/Ground_Dirt_008_baseColor.jpg"));
+    textureID.push_back(LoadTexture("../textures/Ground_Dirt/Ground_Dirt_008_normal.jpg"));
+    textureID.push_back(LoadTexture("../textures/Metallic_Material/Metal_Mesh_006_basecolor.jpg"));
+    textureID.push_back(LoadTexture("../textures/Metallic_Material/Metal_Mesh.jpg")); 
+    textureID.push_back(LoadTexture("../textures/Sapphire/Sapphire_001_COLOR.jpg")); 
+    textureID.push_back(LoadTexture("../textures/Sapphire/Sapphire_001_NORM.jpg"));
+
+    SetupTexture();
+
     // we load the model(s) (code of Model class is in include/utils/model_v2.h)
     Model cubeModel("../models/cube.obj");
     Model sphereModel("../models/sphere.obj");
@@ -582,21 +594,19 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
     // For the second rendering step -> we pass the shadow map to the shaders
     if (render_pass==RENDER)
     {
-        glActiveTexture(GL_TEXTURE2);
+        glActiveTexture(GL_TEXTURE31);
         glBindTexture(GL_TEXTURE_2D, depthMap);
         GLint shadowLocation = glGetUniformLocation(shader.Program, "shadowMap");
-        glUniform1i(shadowLocation, 2);
+        glUniform1i(shadowLocation, 31);
     }
     // we pass the needed uniforms
     GLint textureLocation = glGetUniformLocation(shader.Program, "tex");
+    GLint nMapLocation = glGetUniformLocation(shader.Program, "normalMap");
     GLint repeatLocation = glGetUniformLocation(shader.Program, "repeat");
 
     // PLANE
     // we activate the texture of the plane
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, textureID[1]);
-    glUniform1i(textureLocation, 1);
-    glUniform1f(repeatLocation, 80.0);
+    ActivateTexture(0,700.0,textureLocation,nMapLocation,repeatLocation);
     
     
     /////
@@ -614,10 +624,13 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
       planeNormalMatrix = glm::inverseTranspose(glm::mat3(view*planeModelMatrix));
       glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(planeModelMatrix));
       glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(planeNormalMatrix));
+      glUniform1i(glGetUniformLocation(shader.Program, "normalMapping"), GL_TRUE);
 
       // we render the plane
       cubeModel.Draw();
       planeModelMatrix = glm::mat4(1.0f);
+
+      ActivateTexture(2,10.0f,textureLocation,nMapLocation,repeatLocation);
 
       //right wall
       rwallModelMatrix = glm::mat4(1.0f);
@@ -651,25 +664,25 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
       bwallModelMatrix = glm::mat4(1.0f);
       bwallNormalMatrix = glm::mat3(1.0f);
       bwallModelMatrix = glm::translate(bwallModelMatrix, bwall_pos);
+      bwallModelMatrix = glm::rotate(bwallModelMatrix,glm::radians(90.0f),glm::vec3(0.0f,0.0f,1.0f));
       bwallModelMatrix = glm::rotate(bwallModelMatrix,glm::radians(90.0f),bwall_rot);
       bwallModelMatrix = glm::scale(bwallModelMatrix, bwall_size);
       bwallNormalMatrix = glm::inverseTranspose(glm::mat3(view*bwallModelMatrix));
       glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(bwallModelMatrix));
       glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(bwallNormalMatrix));
+      
 
       // we render the plane
       cubeModel.Draw();
       bwallModelMatrix = glm::mat4(1.0f);
+      glUniform1i(glGetUniformLocation(shader.Program, "normalMapping"), GL_FALSE);
 
       /////
       // DYNAMIC OBJECTS (TARGETS)
 
-      // PLANE
-      // we activate the texture of the plane
-      glActiveTexture(GL_TEXTURE0);
-      glBindTexture(GL_TEXTURE_2D, textureID[0]);
-      glUniform1i(textureLocation, 0);
-      glUniform1f(repeatLocation, 1.0f);
+      // TARGETS
+      // we activate the texture of the targets
+      ActivateTexture(4,2.0f,textureLocation,nMapLocation,repeatLocation);
 
       // array of 16 floats = "native" matrix of OpenGL. We need it as an intermediate data structure to "convert" the Bullet matrix to a GLM matrix
       GLfloat matrix[16];
@@ -697,42 +710,44 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
               // we point objectModel to the cube
               objectModel = &sphereModel;
               obj_size = sphere_size;
-              // we pass red color to the shader
-              glUniform3fv(objDiffuseLocation, 1, diffuseColor);
           
           
 
-          // we take the Collision Object from the list
-          btCollisionObject* obj = bulletSimulation.dynamicsWorld->getCollisionObjectArray()[i];
+            // we take the Collision Object from the list
+            btCollisionObject* obj = bulletSimulation.dynamicsWorld->getCollisionObjectArray()[i];
 
-          // we upcast it in order to use the methods of the main class RigidBody
-          btRigidBody* body = btRigidBody::upcast(obj);
+            // we upcast it in order to use the methods of the main class RigidBody
+            btRigidBody* body = btRigidBody::upcast(obj);
 
-          // we take the transformation matrix of the rigid boby, as calculated by the physics engine
-          body->getMotionState()->getWorldTransform(transform);
+            // we take the transformation matrix of the rigid boby, as calculated by the physics engine
+            body->getMotionState()->getWorldTransform(transform);
 
-          // we convert the Bullet matrix (transform) to an array of floats
-          transform.getOpenGLMatrix(matrix);
+            // we convert the Bullet matrix (transform) to an array of floats
+            transform.getOpenGLMatrix(matrix);
 
-          // we reset to identity at each frame
-          objModelMatrix = glm::mat4(1.0f);
-          objNormalMatrix = glm::mat3(1.0f);
+            // we reset to identity at each frame
+            objModelMatrix = glm::mat4(1.0f);
+            objNormalMatrix = glm::mat3(1.0f);
 
-          // we create the GLM transformation matrix
-          // 1) we convert the array of floats to a GLM mat4 (using make_mat4 method)
-          // 2) Bullet matrix provides rotations and translations: it does not consider scale (usually the Collision Shape is generated using directly the scaled dimensions). If, like in our case, we have applied a scale to the original model, we need to multiply the scale to the rototranslation matrix created in 1). If we are working on an imported and not scaled model, we do not need to do this
-          objModelMatrix = glm::make_mat4(matrix) * glm::scale(objModelMatrix, obj_size);
-          // we create the normal matrix
-          objNormalMatrix = glm::inverseTranspose(glm::mat3(view*objModelMatrix));
-          glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(objModelMatrix));
-          glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(objNormalMatrix));
+            // we create the GLM transformation matrix
+            // 1) we convert the array of floats to a GLM mat4 (using make_mat4 method)
+            // 2) Bullet matrix provides rotations and translations: it does not consider scale (usually the Collision Shape is generated using directly the scaled dimensions). If, like in our case, we have applied a scale to the original model, we need to multiply the scale to the rototranslation matrix created in 1). If we are working on an imported and not scaled model, we do not need to do this
+            objModelMatrix = glm::make_mat4(matrix) * glm::scale(objModelMatrix, obj_size);
+            // we create the normal matrix
+            objNormalMatrix = glm::inverseTranspose(glm::mat3(view*objModelMatrix));
+            glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(objModelMatrix));
+            glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(objNormalMatrix));
+            glUniform1i(glGetUniformLocation(shader.Program, "normalMapping"), GL_TRUE);
+            glUniform1i(glGetUniformLocation(shader.Program, "isTarget"), GL_TRUE);
 
-          // we render the model
-          // N.B.) if the number of models is relatively low, this approach (we render the same mesh several time from the same buffers) can work. If we must render hundreds or more of copies of the same mesh,
-          // there are more advanced techniques to manage Instanced Rendering (see https://learnopengl.com/#!Advanced-OpenGL/Instancing for examples).
-          objectModel->Draw();
-          // we "reset" the matrix
-          objModelMatrix = glm::mat4(1.0f);
+            // we render the model
+            // N.B.) if the number of models is relatively low, this approach (we render the same mesh several time from the same buffers) can work. If we must render hundreds or more of copies of the same mesh,
+            // there are more advanced techniques to manage Instanced Rendering (see https://learnopengl.com/#!Advanced-OpenGL/Instancing for examples).
+            objectModel->Draw();
+            // we "reset" the matrix
+            objModelMatrix = glm::mat4(1.0f);
+            glUniform1i(glGetUniformLocation(shader.Program, "normalMapping"), GL_FALSE);
+            glUniform1i(glGetUniformLocation(shader.Program, "isTarget"), GL_FALSE);
           }
       }
 }
@@ -826,3 +841,20 @@ void PrintCurrentShader(int subroutine)
 {
     std::cout << "Current shader subroutine: " << shaders[subroutine]  << std::endl;
 }
+
+//texture inizialization
+void SetupTexture(){
+    for (int i=0; i<=textureID.size(); i++){
+        glActiveTexture(33984+i);
+        glBindTexture(GL_TEXTURE_2D, textureID[i]);
+    }
+}
+
+//activate texture ad index i (each texture needs color and normal map)
+void ActivateTexture(GLint index, GLfloat repeat, GLint textureLocation, GLint nMapLocation, GLint repeatLocation){
+    glUniform1i(textureLocation, index);
+    glUniform1i(nMapLocation, index+1);
+    glUniform1f(repeatLocation, repeat);
+}
+
+
