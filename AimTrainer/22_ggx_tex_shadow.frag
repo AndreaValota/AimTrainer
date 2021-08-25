@@ -12,6 +12,8 @@ in vec3 lightDir;
 in vec3 vNormal;
 // vector from fragment to camera (in view coordinate)
 in vec3 vViewPosition;
+// position of fragments in view coord
+in vec4 mvPosition;
 
 //TBN matrix used for normal maps
 in mat3 TBN;
@@ -31,6 +33,8 @@ uniform sampler2D tex;
 uniform sampler2D shadowMap;
 // normal map sampler
 uniform sampler2D normalMap;
+// height map sampler
+uniform sampler2D depthMap;
 
 uniform float alpha; // rugosity - 0 : smooth, 1: rough
 uniform float F0; // fresnel reflectance at normal incidence
@@ -38,6 +42,9 @@ uniform float Kd; // weight of diffuse reflection
 
 //activates the normal maps
 uniform bool normalMapping;
+
+//activates the parallax mapping
+uniform bool useParallaxMapping;
 
 //value needed to activet target specific behaviour
 uniform bool isTarget;
@@ -110,15 +117,50 @@ float G1(float angle, float alpha)
     return num / denom;
 }
 
+//function used to create displacement using parallax mapping
+vec2 ParallaxMapping(vec2 texCoords, vec3 viewDir)
+{ 
+    float height =  texture(depthMap, texCoords).r;    
+    vec2 p = viewDir.xy / viewDir.z * (height * 10);//height_scale);
+    return texCoords - p;    
+} 
+
 
 ///////////// MAIN ////////////////////////////////////////////////
 void main()
-{
-    // we repeat the UVs and we sample the texture
-    vec2 repeated_Uv = mod(interp_UV*repeat, 1.0);
-    vec4 surfaceColor = texture(tex, repeated_Uv);
-
+{   
+    vec4 surfaceColor;
     vec3 N;
+    vec2 texCoords;
+    // we repeat the UVs and we sample the textures
+    vec2 repeated_Uv = mod(interp_UV*repeat, 1.0);
+
+    if(useParallaxMapping){
+        // offset texture coordinates with Parallax Mapping
+        vec3 viewDir   = normalize(vViewPosition - vec3(mvPosition));
+        texCoords = ParallaxMapping(repeated_Uv,  viewDir);
+        surfaceColor = texture(tex, repeated_Uv);
+        if(normalMapping){
+            N = texture(normalMap, repeated_Uv).rgb;
+            N = N * 2.0 - 1.0;
+            N = normalize(TBN * N);
+        }else{
+            // normalization of the per-fragment normal
+            N = normalize(vNormal);
+        }
+    }else{
+        surfaceColor = texture(tex, repeated_Uv); 
+        if(normalMapping){
+            N = texture(normalMap, repeated_Uv).rgb;
+            N = N * 2.0 - 1.0;
+            N = normalize(TBN * N);
+        }else{
+            // normalization of the per-fragment normal
+            N = normalize(vNormal);
+        }
+    }
+
+    /*vec3 N;
     if(normalMapping){
         N = texture(normalMap, repeated_Uv).rgb;
         N = N * 2.0 - 1.0;
@@ -128,6 +170,8 @@ void main()
         // normalization of the per-fragment normal
         N = normalize(vNormal);
     }
+    */
+
     // normalization of the per-fragment light incidence direction
     vec3 L = normalize(lightDir.xyz);
 
@@ -199,6 +243,10 @@ void main()
         finalColor = (lambert + specular)*NdotL;
         finalColor += vec3(0.1f,0.1f,0.3f);
     }
+
+    /*if(useParallaxMapping){
+        finalColor = vec3(repeated_Uv - texCoords.0f);
+    }*/
 
     colorFrag = vec4(finalColor, 1.0);
 }

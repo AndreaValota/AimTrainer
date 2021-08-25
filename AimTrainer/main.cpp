@@ -75,6 +75,12 @@ void ActivateTexture(GLint index, GLfloat repeat, GLint textureLocation, GLint n
 // load image from disk and create an OpenGL texture
 GLint LoadTexture(const char* path);
 
+// load the 6 images from disk and create an OpenGL cubemap
+GLint LoadTextureCube(string path);
+
+// texture unit for the cube map
+GLuint textureCube;
+
 // vector for the textures IDs
 vector<GLint> textureID;
 
@@ -148,7 +154,7 @@ glm::mat3 bwallNormalMatrix = glm::mat3(1.0f);
 // we will use the cube mesh to simulate the plane, because we need some "height" in the mesh
 // in order to make it work with the physics simulation
 glm::vec3 plane_pos = glm::vec3(0.0f, -1.1f, 0.0f);
-glm::vec3 plane_size = glm::vec3(200.0f, 0.1f, 200.0f);
+glm::vec3 plane_size = glm::vec3(25.0f, 0.1f, 25.0f);
 glm::vec3 plane_rot = glm::vec3(0.0f, 0.0f, 0.0f);
 
 glm::vec3 rwall_pos = glm::vec3(4.5f, 3.0f, 0.0f);
@@ -231,6 +237,9 @@ int main()
 
     Shader crosshair_shader = Shader("09_illumination_models.vert","10_illumination_models.frag");
 
+    // we create the Shader Program used for the environment map
+    Shader skybox_shader("17_skybox.vert", "18_skybox.frag");
+
     // we parse the Shader Program to search for the number and names of the subroutines.
     // the names are placed in the shaders vector
     SetupShader(object_shader.Program);
@@ -238,12 +247,16 @@ int main()
     PrintCurrentShader(current_subroutine);
 
     // we load the images and store them in a vector
-    textureID.push_back(LoadTexture("../textures/Ground_Dirt/Ground_Dirt_008_baseColor.jpg"));
-    textureID.push_back(LoadTexture("../textures/Ground_Dirt/Ground_Dirt_008_normal.jpg"));
-    textureID.push_back(LoadTexture("../textures/Metallic_Material/Metal_Mesh_006_basecolor.jpg"));
-    textureID.push_back(LoadTexture("../textures/Metallic_Material/Metal_Mesh.jpg")); 
+    textureID.push_back(LoadTexture("../textures/Stylized_Stone/Stylized_Stone_Floor_002_basecolor.jpg"));
+    textureID.push_back(LoadTexture("../textures/Stylized_Stone/Stylized_Stone_Floor_002_normal.jpg"));
+    textureID.push_back(LoadTexture("../textures/Concrete_Wall/Concrete_Wall_008_basecolor.jpg"));
+    textureID.push_back(LoadTexture("../textures/Concrete_Wall/Concrete_Wall_008_normal.jpg")); 
     textureID.push_back(LoadTexture("../textures/Sapphire/Sapphire_001_COLOR.jpg")); 
     textureID.push_back(LoadTexture("../textures/Sapphire/Sapphire_001_NORM.jpg"));
+    //textureID.push_back(LoadTexture("../textures/White_Brick_Wall/Brick_Wall_015_DISP.jpg"));
+
+    // we load the cube map (we pass the path to the folder containing the 6 views)
+    textureCube = LoadTextureCube("../textures/cube/skybox/");
 
     SetupTexture();
 
@@ -443,7 +456,7 @@ int main()
       glUniformMatrix4fv(glGetUniformLocation(crosshair_shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(crossModelMatrix));
       glUniformMatrix3fv(glGetUniformLocation(crosshair_shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(crossNormalMatrix));
 
-      // we render the plane
+      // we render the crosshair
       cubeModel.Draw();
       crossModelMatrix = glm::mat4(1.0f);
 
@@ -458,10 +471,40 @@ int main()
       glUniformMatrix4fv(glGetUniformLocation(crosshair_shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(crossModelMatrix));
       glUniformMatrix3fv(glGetUniformLocation(crosshair_shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(crossNormalMatrix));
 
-      // we render the plane
+      // we render the crosshair
       cubeModel.Draw();
       crossModelMatrix = glm::mat4(1.0f);
       
+      /////////////////// SKYBOX ////////////////////////////////////////////////
+      // we use the cube to attach the 6 textures of the environment map.
+      // we render it after all the other objects, in order to avoid the depth tests as much as possible.
+      // we will set, in the vertex shader for the skybox, all the values to the maximum depth. Thus, the environment map is rendered only where there are no other objects in the image (so, only on the background).
+      //Thus, we set the depth test to GL_LEQUAL, in order to let the fragments of the background pass the depth test (because they have the maximum depth possible, and the default setting is GL_LESS)
+      glDepthFunc(GL_LEQUAL);
+      skybox_shader.Use();
+      // we activate the cube map
+      glActiveTexture(GL_TEXTURE30);
+      glBindTexture(GL_TEXTURE_CUBE_MAP, textureCube);
+      // we pass projection and view matrices to the Shader Program of the skybox
+      glUniformMatrix4fv(glGetUniformLocation(skybox_shader.Program, "projectionMatrix"), 1, GL_FALSE, glm::value_ptr(projection));
+      // to have the background fixed during camera movements, we have to remove the translations from the view matrix
+      // thus, we consider only the top-left submatrix, and we create a new 4x4 matrix
+      view = glm::mat4(glm::mat3(view)); // Remove any translation component of the view matrix
+      glUniformMatrix4fv(glGetUniformLocation(skybox_shader.Program, "viewMatrix"), 1, GL_FALSE, glm::value_ptr(view));
+
+      // we determine the position in the Shader Program of the uniform variables
+      GLint textureLocation = glGetUniformLocation(skybox_shader.Program, "tCube");
+      // we assign the value to the uniform variable
+      glUniform1i(textureLocation, 30);
+
+      glm::mat4 skyboxModelMatrix = glm::mat4(1.0f);
+      skyboxModelMatrix = glm::rotate(skyboxModelMatrix,glm::radians(195.0f),glm::vec3(0.0f,1.0f,0.0f));
+      glUniformMatrix4fv(glGetUniformLocation(skybox_shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(skyboxModelMatrix));
+
+      // we render the cube with the environment map
+      cubeModel.Draw();
+      // we set again the depth test to the default operation for the next frame
+      glDepthFunc(GL_LESS);
 
       // Faccio lo swap tra back e front buffer
       glfwSwapBuffers(window);
@@ -472,6 +515,7 @@ int main()
   object_shader.Delete();
   shadow_shader.Delete();
   crosshair_shader.Delete();
+  skybox_shader.Delete();
   // we delete the data of the physical simulation
   bulletSimulation.Clear();
   // we close and delete the created context
@@ -602,11 +646,12 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
     // we pass the needed uniforms
     GLint textureLocation = glGetUniformLocation(shader.Program, "tex");
     GLint nMapLocation = glGetUniformLocation(shader.Program, "normalMap");
+    GLint dMapLocation = glGetUniformLocation(shader.Program, "depthMap");
     GLint repeatLocation = glGetUniformLocation(shader.Program, "repeat");
 
     // PLANE
     // we activate the texture of the plane
-    ActivateTexture(0,700.0,textureLocation,nMapLocation,repeatLocation);
+    ActivateTexture(0,100.0,textureLocation,nMapLocation,repeatLocation);
     
     
     /////
@@ -630,7 +675,9 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
       cubeModel.Draw();
       planeModelMatrix = glm::mat4(1.0f);
 
-      ActivateTexture(2,10.0f,textureLocation,nMapLocation,repeatLocation);
+      ActivateTexture(2,5.0f,textureLocation,nMapLocation,repeatLocation);
+      glUniform1i(dMapLocation, 6);
+      glUniform1f(repeatLocation, 5.0f);
 
       //right wall
       rwallModelMatrix = glm::mat4(1.0f);
@@ -641,6 +688,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
       rwallNormalMatrix = glm::inverseTranspose(glm::mat3(view*rwallModelMatrix));
       glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(rwallModelMatrix));
       glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(rwallNormalMatrix));
+      //glUniform1i(glGetUniformLocation(shader.Program, "useParallaxMapping"), GL_TRUE);
 
       // we render the plane
       cubeModel.Draw();
@@ -676,6 +724,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
       cubeModel.Draw();
       bwallModelMatrix = glm::mat4(1.0f);
       glUniform1i(glGetUniformLocation(shader.Program, "normalMapping"), GL_FALSE);
+      glUniform1i(glGetUniformLocation(shader.Program, "useParallaxMapping"), GL_FALSE);
 
       /////
       // DYNAMIC OBJECTS (TARGETS)
@@ -855,6 +904,63 @@ void ActivateTexture(GLint index, GLfloat repeat, GLint textureLocation, GLint n
     glUniform1i(textureLocation, index);
     glUniform1i(nMapLocation, index+1);
     glUniform1f(repeatLocation, repeat);
+}
+
+///////////////////////////////////////////
+// load one side of the cubemap, passing the name of the file and the side of the corresponding OpenGL cubemap
+void LoadTextureCubeSide(string path, string side_image, GLuint side_name)
+{
+    int w, h;
+    unsigned char* image;
+    string fullname;
+
+    // full name and path of the side of the cubemap
+    fullname = path + side_image;
+    // we load the image file
+    image = stbi_load(fullname.c_str(), &w, &h, 0, STBI_rgb);
+    if (image == nullptr)
+        std::cout << "Failed to load texture!" << std::endl;
+    // we set the image file as one of the side of the cubemap (passed as a parameter)
+    glTexImage2D(side_name, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, image);
+    // we free the memory once we have created an OpenGL texture
+    stbi_image_free(image);
+}
+
+//////////////////////////////////////////
+// we load the 6 images from disk and we create an OpenGL cube map
+GLint LoadTextureCube(string path)
+{
+    GLuint textureImage;
+
+    // we create and activate the OpenGL cubemap texture
+    glGenTextures(1, &textureImage);
+    glActiveTexture(GL_TEXTURE30);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, textureImage);
+
+    // we load and set the 6 images corresponding to the 6 views of the cubemap
+    // we use as convention that the names of the 6 images are "posx, negx, posy, negy, posz, negz", placed at the path passed as parameter
+    // we load the images individually and we assign them to the correct sides of the cube map
+    LoadTextureCubeSide(path, std::string("right.jpg"), GL_TEXTURE_CUBE_MAP_POSITIVE_X);
+    LoadTextureCubeSide(path, std::string("left.jpg"), GL_TEXTURE_CUBE_MAP_NEGATIVE_X);
+    LoadTextureCubeSide(path, std::string("top.jpg"), GL_TEXTURE_CUBE_MAP_POSITIVE_Y);
+    LoadTextureCubeSide(path, std::string("bottom.jpg"), GL_TEXTURE_CUBE_MAP_NEGATIVE_Y);
+    LoadTextureCubeSide(path, std::string("back.jpg"), GL_TEXTURE_CUBE_MAP_POSITIVE_Z);
+    LoadTextureCubeSide(path, std::string("front.jpg"), GL_TEXTURE_CUBE_MAP_NEGATIVE_Z);
+
+    // we set the filtering for minification and magnification
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    // we set how to consider the texture coordinates outside [0,1] range
+    // in this case we have a cube map, so
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    // we set the binding to 0 once we have finished
+    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+
+    return textureImage;
+
 }
 
 

@@ -53,6 +53,9 @@ out mat3 TBN;
 // to do this, we need to calculate in the vertex shader the view direction (in view coordinates) for each vertex, and to have it interpolated for each fragment by the rasterization stage
 out vec3 vViewPosition;
 
+// position needed in the fragment shader to compute the displacements for parallax mapping
+out vec4 mvPosition;
+
 // the output variable for UV coordinates
 out vec2 interp_UV;
 
