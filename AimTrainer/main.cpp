@@ -90,6 +90,9 @@ bool keys[1024];
 //number of walls (useful to avoid certain controls on collisions)
 GLint walls_number = 4;
 
+//number of buttons (useful to avoid certain controls on collisions)
+GLint buttons_number = 3;
+
 // we need to store the previous mouse position to calculate the offset with the current frame
 GLfloat lastX, lastY;
 
@@ -118,7 +121,7 @@ glm::vec3 lightDir0 = glm::vec3(1.0f, 1.0f, 1.0f);
 // weight for the diffusive component
 GLfloat Kd = 3.0f;
 // roughness index for GGX shader
-GLfloat alpha = 0.2f;
+GLfloat alpha = 0.4f;
 // Fresnel reflectance at 0 degree (Schlik's approximation)
 GLfloat F0 = 0.9f;
 
@@ -148,6 +151,12 @@ glm::mat4 lwallModelMatrix = glm::mat4(1.0f);
 glm::mat3 lwallNormalMatrix = glm::mat3(1.0f);
 glm::mat4 bwallModelMatrix = glm::mat4(1.0f);
 glm::mat3 bwallNormalMatrix = glm::mat3(1.0f);
+glm::mat4 button_concrete_ModelMatrix = glm::mat4(1.0f);
+glm::mat3 button_concrete_NormalMatrix = glm::mat3(1.0f);
+glm::mat4 button_metallic_ModelMatrix = glm::mat4(1.0f);
+glm::mat3 button_metallic_NormalMatrix = glm::mat3(1.0f);
+glm::mat4 button_abstract_ModelMatrix = glm::mat4(1.0f);
+glm::mat3 button_abstract_NormalMatrix = glm::mat3(1.0f);
 
 
 // dimensions and position of the static plane
@@ -157,17 +166,29 @@ glm::vec3 plane_pos = glm::vec3(0.0f, -1.1f, 0.0f);
 glm::vec3 plane_size = glm::vec3(25.0f, 0.1f, 25.0f);
 glm::vec3 plane_rot = glm::vec3(0.0f, 0.0f, 0.0f);
 
-glm::vec3 rwall_pos = glm::vec3(4.5f, 3.0f, 0.0f);
-glm::vec3 rwall_size = glm::vec3(4.0f, 0.4f, 4.0f);
+glm::vec3 rwall_pos = glm::vec3(6.2f, 3.0f, 0.0f);
+glm::vec3 rwall_size = glm::vec3(4.0f, 2.0f, 4.0f);
 glm::vec3 rwall_rot = glm::vec3(0.0f, 0.0f, 1.0f);
 
-glm::vec3 lwall_pos = glm::vec3(-4.5f, 3.0f, 0.0f);
-glm::vec3 lwall_size = glm::vec3(4.0f, 0.4f, 4.0f);
+glm::vec3 lwall_pos = glm::vec3(-6.2f, 3.0f, 0.0f);
+glm::vec3 lwall_size = glm::vec3(4.0f, 2.0f, 4.0f);
 glm::vec3 lwall_rot = glm::vec3(0.0f, 0.0f, 1.0f);
     
-glm::vec3 bwall_pos = glm::vec3(0.0f, 3.0f, -3.6f);
-glm::vec3 bwall_size = glm::vec3(4.0f, 0.4f, 4.2f);
+glm::vec3 bwall_pos = glm::vec3(0.0f, 3.0f, -3.0f);
+glm::vec3 bwall_size = glm::vec3(4.0f, 1.0f, 4.2f);
 glm::vec3 bwall_rot = glm::vec3(1.0f, 0.0f, 0.0f);
+
+glm::vec3 button_concrete_room_pos = glm::vec3(-7.4f, -0.5f, 4.5f);
+glm::vec3 button_concrete_room_size = glm::vec3(0.5f, 0.5f, 0.5f);
+glm::vec3 button_concrete_room_rot = glm::vec3(1.0f, 0.0f, 0.0f);
+
+glm::vec3 button_metallic_room_pos = glm::vec3(-6.2f, -0.5f, 4.5f);
+glm::vec3 button_metallic_room_size = glm::vec3(0.5f, 0.5f, 0.5f);
+glm::vec3 button_metallic_room_rot = glm::vec3(1.0f, 0.0f, 0.0f);
+
+glm::vec3 button_abstract_room_pos = glm::vec3(-5.0f,-0.5f, 4.5f);
+glm::vec3 button_abstract_room_size = glm::vec3(0.5f, 0.5f, 0.5f);
+glm::vec3 button_abstract_room_rot = glm::vec3(1.0f, 0.0f, 0.0f);
 
 GLint objDiffuseLocation;
 
@@ -250,10 +271,14 @@ int main()
     textureID.push_back(LoadTexture("../textures/Stylized_Stone/Stylized_Stone_Floor_002_basecolor.jpg"));
     textureID.push_back(LoadTexture("../textures/Stylized_Stone/Stylized_Stone_Floor_002_normal.jpg"));
     textureID.push_back(LoadTexture("../textures/Concrete_Wall/Concrete_Wall_008_basecolor.jpg"));
-    textureID.push_back(LoadTexture("../textures/Concrete_Wall/Concrete_Wall_008_normal.jpg")); 
+    textureID.push_back(LoadTexture("../textures/Concrete_Wall/Concrete_Wall_008_normal.jpg"));
+    textureID.push_back(LoadTexture("../textures/Metallic_Material/Metal_Mesh_006_basecolor.jpg"));
+    textureID.push_back(LoadTexture("../textures/Metallic_Material/Metal_Mesh_006_normal.jpg"));
+    textureID.push_back(LoadTexture("../textures/Rubber_Floor/Rubber_Floor_001_basecolor.jpg"));
+    textureID.push_back(LoadTexture("../textures/Rubber_Floor/Rubber_Floor_001_normal.jpg")); 
     textureID.push_back(LoadTexture("../textures/Sapphire/Sapphire_001_COLOR.jpg")); 
     textureID.push_back(LoadTexture("../textures/Sapphire/Sapphire_001_NORM.jpg"));
-    //textureID.push_back(LoadTexture("../textures/White_Brick_Wall/Brick_Wall_015_DISP.jpg"));
+    
 
     // we load the cube map (we pass the path to the folder containing the 6 views)
     textureCube = LoadTextureCube("../textures/cube/skybox/");
@@ -272,6 +297,13 @@ int main()
     btRigidBody* rwall = bulletSimulation.createRigidBody(BOX,rwall_pos,rwall_size,rwall_rot,0.0f,0.3f,0.3f);
     btRigidBody* lwall = bulletSimulation.createRigidBody(BOX,lwall_pos,lwall_size,lwall_rot,0.0f,0.3f,0.3f);
     btRigidBody* bwall = bulletSimulation.createRigidBody(BOX,bwall_pos,bwall_size,bwall_rot,0.0f,0.3f,0.3f);
+
+
+    glm::vec3 button_collision_size = glm::vec3(0.3f,0.3f,0.3f);
+    btRigidBody* button_concrete_room = bulletSimulation.createRigidBody(SPHERE,button_concrete_room_pos,button_collision_size,glm::vec3(0.0f,0.0f,0.0f),0.0f,0.3f,0.3f);
+    btRigidBody* button_metallic_room = bulletSimulation.createRigidBody(SPHERE,button_metallic_room_pos,button_collision_size,glm::vec3(0.0f,0.0f,0.0f),0.0f,0.3f,0.3f);
+    btRigidBody* button_abstract_room = bulletSimulation.createRigidBody(SPHERE,button_abstract_room_pos,button_collision_size,glm::vec3(0.0f,0.0f,0.0f),0.0f,0.3f,0.3f);
+    
 
     //crosshair parameters
     glm::vec3 cross_pos;
@@ -616,15 +648,24 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         btVector3 temp(0.0f,0.0f,0.0f);
         btScalar radius;
         int num_cobjs = bulletSimulation.dynamicsWorld->getNumCollisionObjects();
-        for(int i=walls_number; i<(walls_number+7*7); i++){
+        for(int i=walls_number; i<walls_number+buttons_number; i++){
+            btCollisionObject* obj = bulletSimulation.dynamicsWorld->getCollisionObjectArray()[i];
+            btCollisionShape* shape = obj->getCollisionShape();
+            shape->getBoundingSphere(temp, radius);
+            glm::vec3 center (obj->getWorldTransform().getOrigin().getX(),obj->getWorldTransform().getOrigin().getY(),obj->getWorldTransform().getOrigin().getZ());
+            if (hit_sphere(center, radius, camera.Position)){
+                cout<< "Colpito bottone " << i <<endl;
+            }
+        }
+        for(int i=walls_number+buttons_number; i<num_cobjs; i++){
             btCollisionObject* obj = bulletSimulation.dynamicsWorld->getCollisionObjectArray()[i];
             btCollisionShape* shape = obj->getCollisionShape();
             shape->getBoundingSphere(temp, radius);
             glm::vec3 center (obj->getWorldTransform().getOrigin().getX(),obj->getWorldTransform().getOrigin().getY(),obj->getWorldTransform().getOrigin().getZ());
             if (hit_sphere(center, radius, camera.Position)){
                 cout<< "Colpita sfera " << i <<endl;
-                if(active_targets[i-walls_number]){
-                    active_targets[i-walls_number]=false;
+                if(active_targets[i-(walls_number+buttons_number)]){
+                    active_targets[i-(walls_number+buttons_number)]=false;
                     active=true;
                 }
             }
@@ -675,7 +716,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
       cubeModel.Draw();
       planeModelMatrix = glm::mat4(1.0f);
 
-      ActivateTexture(2,5.0f,textureLocation,nMapLocation,repeatLocation);
+      ActivateTexture(2,10.0f,textureLocation,nMapLocation,repeatLocation);
       glUniform1i(dMapLocation, 6);
       glUniform1f(repeatLocation, 5.0f);
 
@@ -723,15 +764,63 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
       // we render the plane
       cubeModel.Draw();
       bwallModelMatrix = glm::mat4(1.0f);
+
+      ActivateTexture(2,2.0f,textureLocation,nMapLocation,repeatLocation);
+
+      //button to room1
+      button_concrete_ModelMatrix = glm::mat4(1.0f);
+      button_concrete_NormalMatrix = glm::mat3(1.0f);
+      button_concrete_ModelMatrix = glm::translate(button_concrete_ModelMatrix, button_concrete_room_pos);
+      button_concrete_ModelMatrix = glm::scale(button_concrete_ModelMatrix, button_concrete_room_size);
+      button_concrete_NormalMatrix = glm::inverseTranspose(glm::mat3(view*button_concrete_ModelMatrix));
+      glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(button_concrete_ModelMatrix));
+      glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(button_concrete_NormalMatrix));
+      
+
+      // we render the button
+      sphereModel.Draw();
+      button_concrete_ModelMatrix = glm::mat4(1.0f);
+
+      ActivateTexture(4,2.0f,textureLocation,nMapLocation,repeatLocation);
+
+      //button to room2
+      button_metallic_ModelMatrix = glm::mat4(1.0f);
+      button_metallic_NormalMatrix = glm::mat3(1.0f);
+      button_metallic_ModelMatrix = glm::translate(button_metallic_ModelMatrix, button_metallic_room_pos);
+      button_metallic_ModelMatrix = glm::scale(button_metallic_ModelMatrix, button_metallic_room_size);
+      button_metallic_NormalMatrix = glm::inverseTranspose(glm::mat3(view*button_metallic_ModelMatrix));
+      glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(button_metallic_ModelMatrix));
+      glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(button_metallic_NormalMatrix));
+      
+
+      // we render the button
+      sphereModel.Draw();
+      button_metallic_ModelMatrix = glm::mat4(1.0f);
+
+      ActivateTexture(6,2.0f,textureLocation,nMapLocation,repeatLocation);
+
+      //button to room3
+      button_abstract_ModelMatrix = glm::mat4(1.0f);
+      button_abstract_NormalMatrix = glm::mat3(1.0f);
+      button_abstract_ModelMatrix = glm::translate(button_abstract_ModelMatrix, button_abstract_room_pos);
+      button_abstract_ModelMatrix = glm::scale(button_abstract_ModelMatrix, button_abstract_room_size);
+      button_abstract_NormalMatrix = glm::inverseTranspose(glm::mat3(view*button_abstract_ModelMatrix));
+      glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(button_abstract_ModelMatrix));
+      glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(button_abstract_NormalMatrix));
+      
+
+      // we render the button
+      sphereModel.Draw();
+      button_abstract_ModelMatrix = glm::mat4(1.0f);
       glUniform1i(glGetUniformLocation(shader.Program, "normalMapping"), GL_FALSE);
-      glUniform1i(glGetUniformLocation(shader.Program, "useParallaxMapping"), GL_FALSE);
+      
 
       /////
       // DYNAMIC OBJECTS (TARGETS)
 
       // TARGETS
       // we activate the texture of the targets
-      ActivateTexture(4,2.0f,textureLocation,nMapLocation,repeatLocation);
+      ActivateTexture(8,2.0f,textureLocation,nMapLocation,repeatLocation);
 
       // array of 16 floats = "native" matrix of OpenGL. We need it as an intermediate data structure to "convert" the Bullet matrix to a GLM matrix
       GLfloat matrix[16];
@@ -751,10 +840,10 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
       }
 
       // we cycle among all the Rigid Bodies (starting from 1 to avoid the plane)
-      for (int i=walls_number; i<num_cobjs;i++)
+      for (int i=walls_number+buttons_number; i<num_cobjs;i++)
       {
           // the first 25 objects are the falling cubes
-          if (active_targets[i-walls_number])
+          if (active_targets[i-(walls_number+buttons_number)])
           {
               // we point objectModel to the cube
               objectModel = &sphereModel;
