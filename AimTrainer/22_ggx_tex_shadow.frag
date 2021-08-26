@@ -24,6 +24,12 @@ in vec2 interp_UV;
 // for the correct rendering of the shadows, we need to calculate the vertex coordinates also in "light coordinates" (= using light as a camera)
 in vec4 posLightSpace;
 
+//point light direction 
+in vec3 pointLightDir;
+
+//point light color
+uniform vec3 pointLightColor;
+
 // texture repetitions
 uniform float repeat;
 
@@ -125,6 +131,64 @@ vec2 ParallaxMapping(vec2 texCoords, vec3 viewDir)
     return texCoords - p;    
 } 
 
+vec3 GGX(vec4 surfaceColor) // this name is the one which is detected by the SetupShaders() function in the main application, and the one used to swap subroutines
+{
+    // normalization of the per-fragment normal
+    vec3 N = normalize(vNormal);
+    // normalization of the per-fragment light incidence direction
+    vec3 L = normalize(pointLightDir.xyz);
+
+    // cosine angle between direction of light and normal
+    float NdotL = max(dot(N, L), 0.0);
+
+    // diffusive (Lambert) reflection component
+    vec3 lambert = (Kd*surfaceColor.rgb)/PI;
+
+    // we initialize the specular component
+    vec3 specular = vec3(0.0);
+
+    // if the cosine of the angle between direction of light and normal is positive, then I can calculate the specular component
+    if(NdotL > 0.0)
+    {
+        // the view vector has been calculated in the vertex shader, already negated to have direction from the mesh to the camera
+        vec3 V = normalize( vViewPosition );
+
+        // half vector
+        vec3 H = normalize(L + V);
+
+        // we implement the components seen in the slides for a PBR BRDF
+        // we calculate the cosines and parameters to be used in the different components
+        float NdotH = max(dot(N, H), 0.0);
+        float NdotV = max(dot(N, V), 0.0);
+        float VdotH = max(dot(V, H), 0.0);
+        float alpha_Squared = alpha * alpha;
+        float NdotH_Squared = NdotH * NdotH;
+
+        // Geometric factor G2 
+        // Smith’s method (uses Schlick-GGX method for both geometry obstruction and shadowing )
+        float G2 = G1(NdotV, alpha)*G1(NdotL, alpha);
+
+        // Rugosity D
+        // GGX Distribution
+        float D = alpha_Squared;
+        float denom = (NdotH_Squared*(alpha_Squared-1.0)+1.0);
+        D /= PI*denom*denom;
+
+        // Fresnel reflectance F (approx Schlick)
+        vec3 F = vec3(pow(1.0 - VdotH, 5.0));
+        F *= (1.0 - F0);
+        F += F0;
+
+        // we put everything together for the specular component
+        specular = (F * G2 * D) / (4.0 * NdotV * NdotL);
+    }
+
+    // the rendering equation is:
+    // integral of: BRDF * Li * (cosine angle between N and L)
+    // BRDF in our case is: the sum of Lambert and GGX
+    // Li is considered as equal to 1: light is white, and we have not applied attenuation. With colored lights, and with attenuation, the code must be modified and the Li factor must be multiplied to finalColor
+    return (lambert + specular)*NdotL;
+}
 
 ///////////// MAIN ////////////////////////////////////////////////
 void main()
@@ -235,18 +299,22 @@ void main()
     // Therefore, we use (1-shadow) as weight to apply to the illumination model
     vec3 finalColor = (1.0 - (shadow*0.7))*(lambert + specular)*NdotL;
 
-    if(NdotL==0.0){
+
+    /*if(NdotL==0.0){
         finalColor = 0.1*(lambert);
-    }
+    }*/
+
+    
 
     if(isTarget){
         finalColor = (lambert + specular)*NdotL;
-        finalColor += vec3(0.1f,0.1f,0.3f);
+        //finalColor += vec3(0.1f,0.1f,0.3f);
     }
 
     /*if(useParallaxMapping){
         finalColor = vec3(repeated_Uv - texCoords.0f);
     }*/
 
+    finalColor+=(GGX(surfaceColor)*0.8)*pointLightColor;
     colorFrag = vec4(finalColor, 1.0);
 }

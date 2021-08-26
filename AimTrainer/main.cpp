@@ -118,6 +118,12 @@ Camera camera(glm::vec3(0.0f, 0.0f, 9.0f), GL_FALSE);
 // Directional light
 glm::vec3 lightDir0 = glm::vec3(1.0f, 1.0f, 1.0f);
 
+//point light
+glm::vec3 pointLightPosition = glm::vec3(0.0f, 0.0f, 0.0f);
+glm::vec3 pointLightColor = glm::vec3(0.5, 0.0, 0.0);
+GLint pointLightLocation;
+GLint pointLightColorLocation;
+
 // weight for the diffusive component
 GLfloat Kd = 3.0f;
 // roughness index for GGX shader
@@ -138,6 +144,12 @@ GLfloat repeat = 1.0f;
 //active target array
 GLboolean active_targets [49] = {false};
 GLboolean active = true;
+
+//Selected room index
+enum room{FIRST, SECOND, THIRD};
+GLint active_room = FIRST;
+
+
 
 
 // Model and Normal transformation matrices for the objects in the scene: we set to identity
@@ -268,16 +280,28 @@ int main()
     PrintCurrentShader(current_subroutine);
 
     // we load the images and store them in a vector
+    //first room textures
     textureID.push_back(LoadTexture("../textures/Stylized_Stone/Stylized_Stone_Floor_002_basecolor.jpg"));
     textureID.push_back(LoadTexture("../textures/Stylized_Stone/Stylized_Stone_Floor_002_normal.jpg"));
     textureID.push_back(LoadTexture("../textures/Concrete_Wall/Concrete_Wall_008_basecolor.jpg"));
     textureID.push_back(LoadTexture("../textures/Concrete_Wall/Concrete_Wall_008_normal.jpg"));
-    textureID.push_back(LoadTexture("../textures/Metallic_Material/Metal_Mesh_006_basecolor.jpg"));
-    textureID.push_back(LoadTexture("../textures/Metallic_Material/Metal_Mesh_006_normal.jpg"));
-    textureID.push_back(LoadTexture("../textures/Rubber_Floor/Rubber_Floor_001_basecolor.jpg"));
-    textureID.push_back(LoadTexture("../textures/Rubber_Floor/Rubber_Floor_001_normal.jpg")); 
     textureID.push_back(LoadTexture("../textures/Sapphire/Sapphire_001_COLOR.jpg")); 
     textureID.push_back(LoadTexture("../textures/Sapphire/Sapphire_001_NORM.jpg"));
+    //second room textures
+    textureID.push_back(LoadTexture("../textures/Metal_Plate_012/Metal_Plate_012_basecolor.jpg"));
+    textureID.push_back(LoadTexture("../textures/Metal_Plate_012/Metal_Plate_012_normal.jpg"));
+    textureID.push_back(LoadTexture("../textures/Metallic_Material/Metal_Mesh_006_basecolor.jpg"));
+    textureID.push_back(LoadTexture("../textures/Metallic_Material/Metal_Mesh_006_normal.jpg"));
+    textureID.push_back(LoadTexture("../textures/Sphere_Color/sphere_off.jpg")); 
+    textureID.push_back(LoadTexture("../textures/Sphere_Color/sphere_on.jpg"));
+    //third room textures
+    textureID.push_back(LoadTexture("../textures/Rubber_Floor/Rubber_Floor_001_basecolor.jpg"));
+    textureID.push_back(LoadTexture("../textures/Rubber_Floor/Rubber_Floor_001_normal.jpg"));
+    textureID.push_back(LoadTexture("../textures/Rubber_Floor/Rubber_Floor_001_basecolor.jpg"));
+    textureID.push_back(LoadTexture("../textures/Rubber_Floor/Rubber_Floor_001_normal.jpg"));
+    textureID.push_back(LoadTexture("../textures/Sapphire/Sapphire_001_COLOR.jpg")); 
+    textureID.push_back(LoadTexture("../textures/Sapphire/Sapphire_001_NORM.jpg"));
+    
     
 
     // we load the cube map (we pass the path to the folder containing the 6 views)
@@ -456,7 +480,8 @@ int main()
 
       // we determine the position in the Shader Program of the uniform variables
       //objDiffuseLocation = glGetUniformLocation(object_shader.Program, "diffuseColor");
-      //GLint pointLightLocation = glGetUniformLocation(object_shader.Program, "pointLightPosition");
+      pointLightLocation = glGetUniformLocation(object_shader.Program, "pointLightPosition");
+      pointLightColorLocation = glGetUniformLocation(object_shader.Program, "pointLightColor");
       GLint lightDirLocation = glGetUniformLocation(object_shader.Program, "lightVector");
       GLint kdLocation = glGetUniformLocation(object_shader.Program, "Kd");
       GLint alphaLocation = glGetUniformLocation(object_shader.Program, "alpha");
@@ -654,7 +679,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
             shape->getBoundingSphere(temp, radius);
             glm::vec3 center (obj->getWorldTransform().getOrigin().getX(),obj->getWorldTransform().getOrigin().getY(),obj->getWorldTransform().getOrigin().getZ());
             if (hit_sphere(center, radius, camera.Position)){
-                cout<< "Colpito bottone " << i <<endl;
+                active_room = i-walls_number;
             }
         }
         for(int i=walls_number+buttons_number; i<num_cobjs; i++){
@@ -690,9 +715,10 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
     GLint dMapLocation = glGetUniformLocation(shader.Program, "depthMap");
     GLint repeatLocation = glGetUniformLocation(shader.Program, "repeat");
 
+
     // PLANE
     // we activate the texture of the plane
-    ActivateTexture(0,100.0,textureLocation,nMapLocation,repeatLocation);
+    ActivateTexture(0+active_room*6,100.0,textureLocation,nMapLocation,repeatLocation);
     
     
     /////
@@ -716,7 +742,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
       cubeModel.Draw();
       planeModelMatrix = glm::mat4(1.0f);
 
-      ActivateTexture(2,10.0f,textureLocation,nMapLocation,repeatLocation);
+      ActivateTexture(2+active_room*6,10.0f,textureLocation,nMapLocation,repeatLocation);
       glUniform1i(dMapLocation, 6);
       glUniform1f(repeatLocation, 5.0f);
 
@@ -781,7 +807,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
       sphereModel.Draw();
       button_concrete_ModelMatrix = glm::mat4(1.0f);
 
-      ActivateTexture(4,2.0f,textureLocation,nMapLocation,repeatLocation);
+      ActivateTexture(8,2.0f,textureLocation,nMapLocation,repeatLocation);
 
       //button to room2
       button_metallic_ModelMatrix = glm::mat4(1.0f);
@@ -797,7 +823,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
       sphereModel.Draw();
       button_metallic_ModelMatrix = glm::mat4(1.0f);
 
-      ActivateTexture(6,2.0f,textureLocation,nMapLocation,repeatLocation);
+      ActivateTexture(14,2.0f,textureLocation,nMapLocation,repeatLocation);
 
       //button to room3
       button_abstract_ModelMatrix = glm::mat4(1.0f);
@@ -820,7 +846,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
 
       // TARGETS
       // we activate the texture of the targets
-      ActivateTexture(8,2.0f,textureLocation,nMapLocation,repeatLocation);
+      ActivateTexture(4+active_room*6,2.0f,textureLocation,nMapLocation,repeatLocation);
 
       // array of 16 floats = "native" matrix of OpenGL. We need it as an intermediate data structure to "convert" the Bullet matrix to a GLM matrix
       GLfloat matrix[16];
@@ -839,7 +865,11 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
         active=false;
       }
 
-      // we cycle among all the Rigid Bodies (starting from 1 to avoid the plane)
+
+    switch (active_room)
+    {
+    case FIRST:
+        // we cycle among all the Rigid Bodies (starting from 1 to avoid the plane)
       for (int i=walls_number+buttons_number; i<num_cobjs;i++)
       {
           // the first 25 objects are the falling cubes
@@ -888,6 +918,79 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
             glUniform1i(glGetUniformLocation(shader.Program, "isTarget"), GL_FALSE);
           }
       }
+
+        break;
+    case SECOND:
+    // we cycle among all the Rigid Bodies (starting from 1 to avoid the plane)
+    
+      for (int i=walls_number+buttons_number; i<num_cobjs;i++)
+      {
+             ActivateTexture(4+active_room*6,2.0f,textureLocation,nMapLocation,repeatLocation);
+
+            // we point objectModel to the cube
+            objectModel = &sphereModel;
+            obj_size = sphere_size;
+          
+          
+            // we take the Collision Object from the list
+            btCollisionObject* obj = bulletSimulation.dynamicsWorld->getCollisionObjectArray()[i];
+
+            // we upcast it in order to use the methods of the main class RigidBody
+            btRigidBody* body = btRigidBody::upcast(obj);
+
+            // we take the transformation matrix of the rigid boby, as calculated by the physics engine
+            body->getMotionState()->getWorldTransform(transform);
+
+            // we convert the Bullet matrix (transform) to an array of floats
+            transform.getOpenGLMatrix(matrix);
+
+            // we reset to identity at each frame
+            objModelMatrix = glm::mat4(1.0f);
+            objNormalMatrix = glm::mat3(1.0f);
+
+            // we create the GLM transformation matrix
+            // 1) we convert the array of floats to a GLM mat4 (using make_mat4 method)
+            // 2) Bullet matrix provides rotations and translations: it does not consider scale (usually the Collision Shape is generated using directly the scaled dimensions). If, like in our case, we have applied a scale to the original model, we need to multiply the scale to the rototranslation matrix created in 1). If we are working on an imported and not scaled model, we do not need to do this
+            objModelMatrix = glm::make_mat4(matrix) * glm::scale(objModelMatrix, obj_size);
+            // we create the normal matrix
+            objNormalMatrix = glm::inverseTranspose(glm::mat3(view*objModelMatrix));
+            glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(objModelMatrix));
+            glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(objNormalMatrix));
+            glUniform1i(glGetUniformLocation(shader.Program, "normalMapping"), GL_FALSE);
+            glUniform1i(glGetUniformLocation(shader.Program, "isTarget"), GL_TRUE);
+
+
+
+            if (active_targets[i-(walls_number+buttons_number)]){
+                ActivateTexture(5+active_room*6,2.0f,textureLocation,nMapLocation,repeatLocation);
+                pointLightPosition = glm::vec3(body->getCenterOfMassPosition().getX(), body->getCenterOfMassPosition().getY(), body->getCenterOfMassPosition().getZ());
+                glUniform3fv(pointLightLocation, 1, glm::value_ptr(pointLightPosition));
+                glUniform3fv(pointLightColorLocation, 1, glm::value_ptr(pointLightColor));               
+            }
+
+
+            // we render the model
+            // N.B.) if the number of models is relatively low, this approach (we render the same mesh several time from the same buffers) can work. If we must render hundreds or more of copies of the same mesh,
+            // there are more advanced techniques to manage Instanced Rendering (see https://learnopengl.com/#!Advanced-OpenGL/Instancing for examples).
+            objectModel->Draw();
+
+            
+
+
+            // we "reset" the matrix
+            objModelMatrix = glm::mat4(1.0f);
+            glUniform1i(glGetUniformLocation(shader.Program, "isTarget"), GL_FALSE);
+          
+      }
+    break;
+
+    case THIRD:
+    break;
+    
+    default:
+        break;
+    }
+      
 }
 
 //////////////////////////////////////////

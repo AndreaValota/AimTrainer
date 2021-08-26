@@ -41,8 +41,15 @@ uniform mat4 lightSpaceMatrix;
 // direction of incoming light is passed as an uniform
 uniform vec3 lightVector;
 
+//position of pointlight
+uniform vec3 pointLightPosition;
+
 // direction of incoming light in view coordinates
 out vec3 lightDir;
+
+//light incidence direction in view coordinates
+out vec3 pointLightDir;
+
 // normals in view coordinates
 out vec3 vNormal;
 
@@ -85,6 +92,10 @@ void main(){
   // light incidence directions in view coordinate
   lightDir = vec3(viewMatrix  * vec4(lightVector, 0.0));
 
+  //light incidence of point light
+  vec4 lightPos = viewMatrix * vec4(pointLightPosition, 1.0);
+  pointLightDir = lightPos.xyz - mvPosition.xyz;
+  
   // we apply the projection transformation
   gl_Position = projectionMatrix * mvPosition;
 
