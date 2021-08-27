@@ -131,10 +131,10 @@ vec2 ParallaxMapping(vec2 texCoords, vec3 viewDir)
     return texCoords - p;    
 } 
 
-vec3 GGX(vec4 surfaceColor) // this name is the one which is detected by the SetupShaders() function in the main application, and the one used to swap subroutines
+vec3 GGX(vec4 surfaceColor, vec3 Ntexture) // this name is the one which is detected by the SetupShaders() function in the main application, and the one used to swap subroutines
 {
     // normalization of the per-fragment normal
-    vec3 N = normalize(vNormal);
+    vec3 N = Ntexture;
     // normalization of the per-fragment light incidence direction
     vec3 L = normalize(pointLightDir.xyz);
 
@@ -199,30 +199,16 @@ void main()
     // we repeat the UVs and we sample the textures
     vec2 repeated_Uv = mod(interp_UV*repeat, 1.0);
 
-    if(useParallaxMapping){
-        // offset texture coordinates with Parallax Mapping
-        vec3 viewDir   = normalize(vViewPosition - vec3(mvPosition));
-        texCoords = ParallaxMapping(repeated_Uv,  viewDir);
-        surfaceColor = texture(tex, repeated_Uv);
-        if(normalMapping){
-            N = texture(normalMap, repeated_Uv).rgb;
-            N = N * 2.0 - 1.0;
-            N = normalize(TBN * N);
-        }else{
-            // normalization of the per-fragment normal
-            N = normalize(vNormal);
-        }
+    surfaceColor = texture(tex, repeated_Uv); 
+    if(normalMapping){
+        N = texture(normalMap, repeated_Uv).rgb;
+        N = N * 2.0 - 1.0;
+        N = normalize(TBN * N);
     }else{
-        surfaceColor = texture(tex, repeated_Uv); 
-        if(normalMapping){
-            N = texture(normalMap, repeated_Uv).rgb;
-            N = N * 2.0 - 1.0;
-            N = normalize(TBN * N);
-        }else{
-            // normalization of the per-fragment normal
-            N = normalize(vNormal);
-        }
+        // normalization of the per-fragment normal
+        N = normalize(vNormal);
     }
+    
 
     /*vec3 N;
     if(normalMapping){
@@ -311,10 +297,6 @@ void main()
         //finalColor += vec3(0.1f,0.1f,0.3f);
     }
 
-    /*if(useParallaxMapping){
-        finalColor = vec3(repeated_Uv - texCoords.0f);
-    }*/
-
-    finalColor+=(GGX(surfaceColor)*0.8)*pointLightColor;
+    finalColor+=(GGX(surfaceColor,N)*0.8)*pointLightColor;
     colorFrag = vec4(finalColor, 1.0);
 }
