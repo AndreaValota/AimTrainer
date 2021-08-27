@@ -725,6 +725,11 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
         
 }
 
+float randomNumber(float Min, float Max)
+{
+    return ((float(rand()) / float(RAND_MAX)) * (Max - Min)) + Min;
+}
+
 void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint render_pass, GLuint depthMap ){
     
     // For the second rendering step -> we pass the shadow map to the shaders
@@ -1021,8 +1026,9 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
         // we apply the impulse and shoot the bullet in the scene
         // N.B.) the graphical aspect of the bullet is treated in the rendering loop
         GLfloat shootInitialSpeed = 7.0f;
-        glm::vec3 shoot = glm::normalize(glm::vec3(rand()%3-1,rand()%3-1,rand()%3-1));
+        glm::vec3 shoot = glm::normalize(glm::vec3(randomNumber(-1.0f, 1.0f),randomNumber(-1.0f, 1.0f),randomNumber(-1.0f, 1.0f)));
         btVector3 impulse = btVector3(shoot.x,shoot.y,shoot.z) * shootInitialSpeed;
+        cout<<impulse.getX()<<" "<<impulse.getY()<<" "<<impulse.getZ()<<endl;
         target->applyCentralImpulse(impulse);
         hit=false;
       }
@@ -1254,7 +1260,7 @@ void reset(GLint next_room_index){
         btRigidBody* body = btRigidBody::upcast(obj);
 
         bulletSimulation.dynamicsWorld->removeCollisionObject(body);
-        cout << bulletSimulation.dynamicsWorld->getCollisionObjectArray().size() << endl;
+        //cout << bulletSimulation.dynamicsWorld->getCollisionObjectArray().size() << endl;
     }
 
     if(next_room_index==FIRST || next_room_index==SECOND){
@@ -1280,5 +1286,7 @@ void reset(GLint next_room_index){
     }
 
 };
+
+
 
 
