@@ -70,7 +70,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
 void SetupTexture();
 
 //activate texture ad index i (each texture needs color and normal map at index i+1)
-void ActivateTexture(GLint index, GLfloat repeat, GLint textureLocation, GLint nMapLocation, GLint repeatLocation);
+void ActivateTexture(GLint index, GLfloat repeat, GLint textureLocation, GLint nMapLocation, GLint repeatLocation, GLint proceduralLocation);
 
 // load image from disk and create an OpenGL texture
 GLint LoadTexture(const char* path);
@@ -82,7 +82,12 @@ GLint LoadTextureCube(string path);
 void reset(GLint next_room_index);
 
 // texture unit for the cube map
-GLuint textureCube;
+GLuint textureCube_room1;
+GLuint textureCube_room2;
+GLuint textureCube_room3;
+
+//offset used to load multiple evn maps
+GLint loadedCubes=0;
 
 // vector for the textures IDs
 vector<GLint> textureID;
@@ -94,7 +99,7 @@ bool keys[1024];
 GLint walls_number = 5;
 
 //number of buttons (useful to avoid certain controls on collisions)
-GLint buttons_number = 3;
+GLint buttons_number = 5;
 
 // we need to store the previous mouse position to calculate the offset with the current frame
 GLfloat lastX, lastY;
@@ -186,6 +191,10 @@ glm::mat4 button_metallic_ModelMatrix = glm::mat4(1.0f);
 glm::mat3 button_metallic_NormalMatrix = glm::mat3(1.0f);
 glm::mat4 button_abstract_ModelMatrix = glm::mat4(1.0f);
 glm::mat3 button_abstract_NormalMatrix = glm::mat3(1.0f);
+glm::mat4 button_lower_sensitivity_ModelMatrix = glm::mat4(1.0f);
+glm::mat3 button_lower_sensitivity_NormalMatrix = glm::mat3(1.0f);
+glm::mat4 button_higher_sensitivity_ModelMatrix = glm::mat4(1.0f);
+glm::mat3 button_higher_sensitivity_NormalMatrix = glm::mat3(1.0f);
 
 
 // dimensions and position of the static plane
@@ -221,6 +230,12 @@ glm::vec3 button_metallic_room_rot = glm::vec3(1.0f, 0.0f, 0.0f);
 glm::vec3 button_abstract_room_pos = glm::vec3(-5.0f,-0.5f, 4.5f);
 glm::vec3 button_abstract_room_size = glm::vec3(0.5f, 0.5f, 0.5f);
 glm::vec3 button_abstract_room_rot = glm::vec3(1.0f, 0.0f, 0.0f);
+
+glm::vec3 button_lower_sensitivity_pos = glm::vec3(5.7f, 0.5f, 4.0f);
+
+glm::vec3 button_higher_sensitivity_pos = glm::vec3(6.9f, 0.5f, 4.0f);
+
+glm::vec3 button_sensitivity_size = glm::vec3(0.25f, 0.25f, 0.25f);
 
 GLint objDiffuseLocation;
 
@@ -319,13 +334,15 @@ int main()
     textureID.push_back(LoadTexture("../textures/Rubber_Floor/Rubber_Floor_001_normal.jpg"));
     textureID.push_back(LoadTexture("../textures/Rubber_Floor/Rubber_Floor_001_basecolor.jpg"));
     textureID.push_back(LoadTexture("../textures/Rubber_Floor/Rubber_Floor_001_normal.jpg"));
-    textureID.push_back(LoadTexture("../textures/Sapphire/Sapphire_001_COLOR.jpg")); 
-    textureID.push_back(LoadTexture("../textures/Sapphire/Sapphire_001_NORM.jpg"));
+    textureID.push_back(LoadTexture("../textures/Basketball/basketball_basecolor.jpg")); 
+    textureID.push_back(LoadTexture("../textures/Basketball/basketball_normal.jpg"));
     
     
 
     // we load the cube map (we pass the path to the folder containing the 6 views)
-    textureCube = LoadTextureCube("../textures/cube/skybox/");
+    textureCube_room1 = LoadTextureCube("../textures/cube/skybox/");
+    textureCube_room2 = LoadTextureCube("../textures/cube/red/");
+    textureCube_room3 = LoadTextureCube("../textures/cube/lightblue/");
 
     SetupTexture();
 
@@ -353,6 +370,8 @@ int main()
     btRigidBody* button_concrete_room = bulletSimulation.createRigidBody(SPHERE,button_concrete_room_pos,button_collision_size,glm::vec3(0.0f,0.0f,0.0f),0.0f,0.3f,0.3f);
     btRigidBody* button_metallic_room = bulletSimulation.createRigidBody(SPHERE,button_metallic_room_pos,button_collision_size,glm::vec3(0.0f,0.0f,0.0f),0.0f,0.3f,0.3f);
     btRigidBody* button_abstract_room = bulletSimulation.createRigidBody(SPHERE,button_abstract_room_pos,button_collision_size,glm::vec3(0.0f,0.0f,0.0f),0.0f,0.3f,0.3f);
+    btRigidBody* button_lower_sensitivity = bulletSimulation.createRigidBody(SPHERE,button_lower_sensitivity_pos,button_sensitivity_size,glm::vec3(0.0f,0.0f,0.0f),0.0f,0.3f,0.3f);
+    btRigidBody* button_higer_sensitivity = bulletSimulation.createRigidBody(SPHERE,button_higher_sensitivity_pos,button_sensitivity_size,glm::vec3(0.0f,0.0f,0.0f),0.0f,0.3f,0.3f);
     
 
     //crosshair parameters
@@ -508,6 +527,8 @@ int main()
       GLint kdLocation = glGetUniformLocation(object_shader.Program, "Kd");
       GLint alphaLocation = glGetUniformLocation(object_shader.Program, "alpha");
       GLint f0Location = glGetUniformLocation(object_shader.Program, "F0");
+      GLint timerLocation = glGetUniformLocation(object_shader.Program, "timer");
+
 
       // we assign the value to the uniform variable
       glUniform3fv(lightDirLocation, 1, glm::value_ptr(lightDir0));
@@ -516,6 +537,7 @@ int main()
       glUniform1f(f0Location, F0);
       glUniform3fv(pointLightLocation, 1, glm::value_ptr(pointLightPosition));
       glUniform3fv(pointLightColorLocation, 1, glm::value_ptr(pointLightColor));
+      glUniform1f(timerLocation, currentFrame);
 
     // we render the scene
     RenderObjects(object_shader, cubeModel, sphereModel, RENDER, depthMap);
@@ -564,8 +586,21 @@ int main()
       glDepthFunc(GL_LEQUAL);
       skybox_shader.Use();
       // we activate the cube map
-      glActiveTexture(GL_TEXTURE30);
-      glBindTexture(GL_TEXTURE_CUBE_MAP, textureCube);
+      glActiveTexture(GL_TEXTURE28+active_room);
+      switch (active_room)
+      {
+      case FIRST:
+          glBindTexture(GL_TEXTURE_CUBE_MAP, textureCube_room1);
+          break;
+      case SECOND:
+        glBindTexture(GL_TEXTURE_CUBE_MAP, textureCube_room2);
+          break;
+
+      case THIRD:
+        glBindTexture(GL_TEXTURE_CUBE_MAP, textureCube_room3);
+          break;
+      
+      }
       // we pass projection and view matrices to the Shader Program of the skybox
       glUniformMatrix4fv(glGetUniformLocation(skybox_shader.Program, "projectionMatrix"), 1, GL_FALSE, glm::value_ptr(projection));
       // to have the background fixed during camera movements, we have to remove the translations from the view matrix
@@ -576,7 +611,7 @@ int main()
       // we determine the position in the Shader Program of the uniform variables
       GLint textureLocation = glGetUniformLocation(skybox_shader.Program, "tCube");
       // we assign the value to the uniform variable
-      glUniform1i(textureLocation, 30);
+      glUniform1i(textureLocation, 28+active_room);
 
       glm::mat4 skyboxModelMatrix = glm::mat4(1.0f);
       skyboxModelMatrix = glm::rotate(skyboxModelMatrix,glm::radians(195.0f),glm::vec3(0.0f,1.0f,0.0f));
@@ -702,9 +737,16 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
             btCollisionShape* shape = obj->getCollisionShape();
             shape->getBoundingSphere(temp, radius);
             glm::vec3 center (obj->getWorldTransform().getOrigin().getX(),obj->getWorldTransform().getOrigin().getY(),obj->getWorldTransform().getOrigin().getZ());
-            if (hit_sphere(center, radius, camera.Position)){
+
+            if (((i-walls_number)<3) && hit_sphere(center, radius, camera.Position)){
                 active_room = i-walls_number;
                 reset(active_room);
+            } 
+            if((i-walls_number)==3 && hit_sphere(center, radius, camera.Position)){
+                camera.DecreaseCameraSensitivity();
+            } 
+            if((i-walls_number)==4 && hit_sphere(center, radius, camera.Position)){
+                camera.IncreaseCameraSensitivity();
             }
         }
         for(int i=walls_number+buttons_number; i<num_cobjs; i++){
@@ -742,6 +784,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
     }
     // we pass the needed uniforms
     GLint textureLocation = glGetUniformLocation(shader.Program, "tex");
+    GLint proceduralLocation = glGetUniformLocation(shader.Program, "procedural");
     GLint nMapLocation = glGetUniformLocation(shader.Program, "normalMap");
     GLint dMapLocation = glGetUniformLocation(shader.Program, "depthMap");
     GLint repeatLocation = glGetUniformLocation(shader.Program, "repeat");
@@ -749,7 +792,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
 
     // PLANE
     // we activate the texture of the plane
-    ActivateTexture(0+active_room*6,100.0,textureLocation,nMapLocation,repeatLocation);
+    ActivateTexture(0+active_room*6,100.0,textureLocation,nMapLocation,repeatLocation,proceduralLocation);
     
     
     /////
@@ -773,9 +816,9 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
       cubeModel.Draw();
       planeModelMatrix = glm::mat4(1.0f);
 
-      ActivateTexture(2+active_room*6,10.0f,textureLocation,nMapLocation,repeatLocation);
-      glUniform1i(dMapLocation, 6);
-      glUniform1f(repeatLocation, 5.0f);
+      ActivateTexture(2+active_room*6,10.0f,textureLocation,nMapLocation,repeatLocation,proceduralLocation);
+      //glUniform1i(dMapLocation, 6);
+      //glUniform1f(repeatLocation, 5.0f);
 
       //right wall
       rwallModelMatrix = glm::mat4(1.0f);
@@ -821,7 +864,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
       cubeModel.Draw();
       bwallModelMatrix = glm::mat4(1.0f);
 
-      ActivateTexture(2,2.0f,textureLocation,nMapLocation,repeatLocation);
+      ActivateTexture(2,2.0f,textureLocation,nMapLocation,repeatLocation,proceduralLocation);
 
       //button to room1
       button_concrete_ModelMatrix = glm::mat4(1.0f);
@@ -837,7 +880,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
       sphereModel.Draw();
       button_concrete_ModelMatrix = glm::mat4(1.0f);
 
-      ActivateTexture(8,2.0f,textureLocation,nMapLocation,repeatLocation);
+      ActivateTexture(8,2.0f,textureLocation,nMapLocation,repeatLocation,proceduralLocation);
 
       //button to room2
       button_metallic_ModelMatrix = glm::mat4(1.0f);
@@ -853,7 +896,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
       sphereModel.Draw();
       button_metallic_ModelMatrix = glm::mat4(1.0f);
 
-      ActivateTexture(14,2.0f,textureLocation,nMapLocation,repeatLocation);
+      ActivateTexture(14,2.0f,textureLocation,nMapLocation,repeatLocation,proceduralLocation);
 
       //button to room3
       button_abstract_ModelMatrix = glm::mat4(1.0f);
@@ -869,6 +912,39 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
       sphereModel.Draw();
       button_abstract_ModelMatrix = glm::mat4(1.0f);
       glUniform1i(glGetUniformLocation(shader.Program, "normalMapping"), GL_FALSE);
+
+      ActivateTexture(11,5.0f,textureLocation,nMapLocation,repeatLocation,proceduralLocation);
+
+      //button used to decrease the camera sensitivity
+      button_lower_sensitivity_ModelMatrix = glm::mat4(1.0f);
+      button_lower_sensitivity_NormalMatrix = glm::mat3(1.0f);
+      button_lower_sensitivity_ModelMatrix = glm::translate(button_lower_sensitivity_ModelMatrix, button_lower_sensitivity_pos);
+      button_lower_sensitivity_ModelMatrix = glm::scale(button_lower_sensitivity_ModelMatrix, button_sensitivity_size);
+      button_lower_sensitivity_NormalMatrix = glm::inverseTranspose(glm::mat3(view*button_lower_sensitivity_ModelMatrix));
+      glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(button_lower_sensitivity_ModelMatrix));
+      glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(button_lower_sensitivity_NormalMatrix));
+      
+
+      // we render the button
+      sphereModel.Draw();
+      button_abstract_ModelMatrix = glm::mat4(1.0f);
+      
+      ActivateTexture(11,5.0f,textureLocation,nMapLocation,repeatLocation,proceduralLocation);
+
+      //button used to increase the camera sensitivity
+      button_higher_sensitivity_ModelMatrix = glm::mat4(1.0f);
+      button_higher_sensitivity_NormalMatrix = glm::mat3(1.0f);
+      button_higher_sensitivity_ModelMatrix = glm::translate(button_higher_sensitivity_ModelMatrix, button_higher_sensitivity_pos);
+      button_higher_sensitivity_ModelMatrix = glm::scale(button_higher_sensitivity_ModelMatrix, button_sensitivity_size);
+      button_higher_sensitivity_NormalMatrix = glm::inverseTranspose(glm::mat3(view*button_higher_sensitivity_ModelMatrix));
+      glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(button_higher_sensitivity_ModelMatrix));
+      glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(button_higher_sensitivity_NormalMatrix));
+      
+
+      // we render the button
+      sphereModel.Draw();
+      button_abstract_ModelMatrix = glm::mat4(1.0f);
+      
       
 
       /////
@@ -876,7 +952,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
 
       // TARGETS
       // we activate the texture of the targets
-      ActivateTexture(4+active_room*6,2.0f,textureLocation,nMapLocation,repeatLocation);
+      ActivateTexture(4+active_room*6,2.0f,textureLocation,nMapLocation,repeatLocation,proceduralLocation);
 
       // array of 16 floats = "native" matrix of OpenGL. We need it as an intermediate data structure to "convert" the Bullet matrix to a GLM matrix
       GLfloat matrix[16];
@@ -901,6 +977,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
     case FIRST:
       alpha = 0.4f;
       F0 = 0.9f;
+
       // we cycle among all the Rigid Bodies (starting from 1 to avoid the plane)
       for (int i=walls_number+buttons_number; i<num_cobjs;i++)
       {
@@ -958,7 +1035,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
       F0 = 0.5f;
       for (int i=walls_number+buttons_number; i<num_cobjs;i++)
       {
-            ActivateTexture(4+active_room*6,2.0f,textureLocation,nMapLocation,repeatLocation);
+            ActivateTexture(4+active_room*6,2.0f,textureLocation,nMapLocation,repeatLocation,proceduralLocation);
 
             // we point objectModel to the cube
             objectModel = &sphereModel;
@@ -995,7 +1072,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
 
 
             if (active_targets[i-(walls_number+buttons_number)]){
-                ActivateTexture(5+active_room*6,2.0f,textureLocation,nMapLocation,repeatLocation);
+                ActivateTexture(5+active_room*6,2.0f,textureLocation,nMapLocation,repeatLocation,proceduralLocation);
                 pointLightPosition = glm::vec3(body->getCenterOfMassPosition().getX(), body->getCenterOfMassPosition().getY(), body->getCenterOfMassPosition().getZ());              
             }
 
@@ -1016,19 +1093,22 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
     break;
 
     case THIRD:
-      alpha = 0.4f;
+      alpha = 0.2f;
       F0 = 0.9f;
+
+    // we activate the texture of the targets
+      ActivateTexture(4+active_room*6,1.0f,textureLocation,nMapLocation,repeatLocation,proceduralLocation);
       if(hit){
         reset(active_room);
         target_pos = glm::vec3((num_side - (rand()%7)*0.5f)-5.5f, (num_side - (rand()%7)*0.5f)-2.5f, 0.7f);
-        target = bulletSimulation.createRigidBody(SPHERE,target_pos,glm::vec3(0.15f,0.2f,0.2f),glm::vec3(0.0f,0.0f,0.0f),1.0f,0.5f,1.0f);
+        target = bulletSimulation.createRigidBody(SPHERE,target_pos,glm::vec3(0.15f,0.2f,0.2f),glm::vec3(0.0f,0.0f,0.0f),1.0f,0.5f,0.9f);
 
         // we apply the impulse and shoot the bullet in the scene
         // N.B.) the graphical aspect of the bullet is treated in the rendering loop
         GLfloat shootInitialSpeed = 7.0f;
         glm::vec3 shoot = glm::normalize(glm::vec3(randomNumber(-1.0f, 1.0f),randomNumber(-1.0f, 1.0f),randomNumber(-1.0f, 1.0f)));
         btVector3 impulse = btVector3(shoot.x,shoot.y,shoot.z) * shootInitialSpeed;
-        cout<<impulse.getX()<<" "<<impulse.getY()<<" "<<impulse.getZ()<<endl;
+        //cout<<impulse.getX()<<" "<<impulse.getY()<<" "<<impulse.getZ()<<endl;
         target->applyCentralImpulse(impulse);
         hit=false;
       }
@@ -1187,7 +1267,14 @@ void SetupTexture(){
 }
 
 //activate texture ad index i (each texture needs color and normal map)
-void ActivateTexture(GLint index, GLfloat repeat, GLint textureLocation, GLint nMapLocation, GLint repeatLocation){
+void ActivateTexture(GLint index, GLfloat repeat, GLint textureLocation, GLint nMapLocation, GLint repeatLocation, GLint proceduralLocation){
+
+    glUniform1i(proceduralLocation, GL_FALSE);
+    if(index==14){
+        glUniform1i(proceduralLocation, GL_TRUE);
+        repeat = 5.0f;
+    }
+
     glUniform1i(textureLocation, index);
     glUniform1i(nMapLocation, index+1);
     glUniform1f(repeatLocation, repeat);
@@ -1221,7 +1308,7 @@ GLint LoadTextureCube(string path)
 
     // we create and activate the OpenGL cubemap texture
     glGenTextures(1, &textureImage);
-    glActiveTexture(GL_TEXTURE30);
+    glActiveTexture(GL_TEXTURE28+loadedCubes);
     glBindTexture(GL_TEXTURE_CUBE_MAP, textureImage);
 
     // we load and set the 6 images corresponding to the 6 views of the cubemap
@@ -1245,6 +1332,8 @@ GLint LoadTextureCube(string path)
 
     // we set the binding to 0 once we have finished
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+    loadedCubes = loadedCubes+1;
+    cout<<loadedCubes<<endl;
 
     return textureImage;
 
