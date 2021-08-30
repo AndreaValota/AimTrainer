@@ -66,9 +66,6 @@ void PrintCurrentShader(int subroutine);
 // in this application, we have isolated the models rendering using a function, which will be called in each rendering step
 void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint render_pass, GLuint depthMap);
 
-//texture inizialization
-void SetupTexture();
-
 //activate texture ad index i (each texture needs color and normal map at index i+1)
 void ActivateTexture(GLint index, GLfloat repeat, GLint textureLocation, GLint nMapLocation, GLint repeatLocation, GLint proceduralLocation);
 
@@ -344,8 +341,6 @@ int main()
     textureCube_room2 = LoadTextureCube("../textures/cube/red/");
     textureCube_room3 = LoadTextureCube("../textures/cube/lightblue/");
 
-    SetupTexture();
-
     // we load the model(s) (code of Model class is in include/utils/model_v2.h)
     Model cubeModel("../models/cube.obj");
     Model sphereModel("../models/sphere.obj");
@@ -414,6 +409,7 @@ int main()
     GLuint depthMap;
     glGenTextures(1, &depthMap);
     glBindTexture(GL_TEXTURE_2D, depthMap);
+    cout << depthMap <<endl;
     // in the texture, we will save only the depth data of the fragments. Thus, we specify that we need to render only depth in the first rendering step
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -777,10 +773,10 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
     // For the second rendering step -> we pass the shadow map to the shaders
     if (render_pass==RENDER)
     {
-        glActiveTexture(GL_TEXTURE31);
+        glActiveTexture(GL_TEXTURE22);
         glBindTexture(GL_TEXTURE_2D, depthMap);
         GLint shadowLocation = glGetUniformLocation(shader.Program, "shadowMap");
-        glUniform1i(shadowLocation, 31);
+        glUniform1i(shadowLocation, 22);
     }
     // we pass the needed uniforms
     GLint textureLocation = glGetUniformLocation(shader.Program, "tex");
@@ -817,7 +813,6 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
       planeModelMatrix = glm::mat4(1.0f);
 
       ActivateTexture(2+active_room*6,10.0f,textureLocation,nMapLocation,repeatLocation,proceduralLocation);
-      //glUniform1i(dMapLocation, 6);
       //glUniform1f(repeatLocation, 5.0f);
 
       //right wall
@@ -1258,16 +1253,13 @@ void PrintCurrentShader(int subroutine)
     std::cout << "Current shader subroutine: " << shaders[subroutine]  << std::endl;
 }
 
-//texture inizialization
-void SetupTexture(){
-    for (int i=0; i<=textureID.size(); i++){
-        glActiveTexture(33984+i);
-        glBindTexture(GL_TEXTURE_2D, textureID[i]);
-    }
-}
-
 //activate texture ad index i (each texture needs color and normal map)
 void ActivateTexture(GLint index, GLfloat repeat, GLint textureLocation, GLint nMapLocation, GLint repeatLocation, GLint proceduralLocation){
+    glActiveTexture(33984+index);
+    glBindTexture(GL_TEXTURE_2D, textureID[index]);
+
+    glActiveTexture(33984+index+1);
+    glBindTexture(GL_TEXTURE_2D, textureID[index+1]);
 
     glUniform1i(proceduralLocation, GL_FALSE);
     if(index==14){
