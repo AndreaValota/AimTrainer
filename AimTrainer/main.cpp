@@ -23,6 +23,10 @@
 
 #include <cstdlib>
 
+#include <map>
+#include <ft2build.h>
+#include FT_FREETYPE_H
+
 // classes developed during lab lectures to manage shaders, to load models, for FPS camera, and for physical simulation
 #include <utils/shader_v1.h>
 #include <utils/model_v1.h>
@@ -77,6 +81,9 @@ GLint LoadTextureCube(string path);
 
 //function used to reset rigid bodies and parametes between room changes
 void reset(GLint next_room_index);
+
+// 2D text renderer function
+void RenderText(Shader &shader, std::string text, float x, float y, float scale, glm::vec3 color);
 
 // texture unit for the cube map
 GLuint textureCube_room1;
@@ -239,6 +246,18 @@ GLint objDiffuseLocation;
 // instance of the physics class
 Physics bulletSimulation;
 
+/// Holds all state information relevant to a character as loaded using FreeType
+struct Character {
+    unsigned int TextureID; // ID handle of the glyph texture
+    glm::ivec2   Size;      // Size of glyph
+    glm::ivec2   Bearing;   // Offset from baseline to left/top of glyph
+    unsigned int Advance;   // Horizontal offset to advance to next glyph
+};
+
+std::map<GLchar, Character> Characters;
+// VAO, VBO declaration for HUD
+GLuint VAO, VBO;
+
 ////////////////// MAIN function ///////////////////////
 int main()
 {
@@ -295,6 +314,10 @@ int main()
     //seed for randomizer
     srand(time(0));
 
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     // we create the Shader Program for the creation of the shadow map
     Shader shadow_shader("19_shadowmap.vert", "20_shadowmap.frag");
     // the Shader Program for the objects used in the application
@@ -304,6 +327,13 @@ int main()
 
     // we create the Shader Program used for the environment map
     Shader skybox_shader("17_skybox.vert", "18_skybox.frag");
+
+    // Shader Program for the 2d text
+    Shader text_shader("text.vert", "text.frag");
+    glm::mat4 text_projection = glm::ortho(0.0f, static_cast<float>(screenWidth), 0.0f, static_cast<float>(screenHeight));
+    text_shader.Use();
+    glUniformMatrix4fv(glGetUniformLocation(text_shader.Program, "projection"), 1, GL_FALSE, glm::value_ptr(text_projection));
+    glUniform1d(glGetUniformLocation(text_shader.Program, "text"), 23);
 
     // we parse the Shader Program to search for the number and names of the subroutines.
     // the names are placed in the shaders vector
@@ -436,8 +466,91 @@ int main()
   // Projection matrix: FOV angle, aspect ratio, near and far planes
   glm::mat4 projection = glm::perspective(45.0f, (float)screenWidth/(float)screenHeight, 0.1f, 10000.0f);
 
- 
+  /*
 
+
+
+
+
+  */
+
+FT_Library ft;
+if (FT_Init_FreeType(&ft))
+{
+    std::cout << "ERROR::FREETYPE: Could not init FreeType Library" << std::endl;
+    return -1;
+}
+
+FT_Face face;
+if (FT_New_Face(ft, "../fonts/arial.ttf", 0, &face))
+{
+    std::cout << "ERROR::FREETYPE: Failed to load font" << std::endl;  
+    return -1;
+}
+
+FT_Set_Pixel_Sizes(face, 0, 48); 
+
+glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // disable byte-alignment restriction
+  
+for (unsigned char c = 0; c < 128; c++)
+{
+    // load character glyph 
+    if (FT_Load_Char(face, c, FT_LOAD_RENDER))
+    {
+        std::cout << "ERROR::FREETYTPE: Failed to load Glyph" << std::endl;
+        continue;
+    }
+    
+    // generate texture
+    unsigned int texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    //cout<<texture<<endl;
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RED,
+        face->glyph->bitmap.width,
+        face->glyph->bitmap.rows,
+        0,
+        GL_RED,
+        GL_UNSIGNED_BYTE,
+        face->glyph->bitmap.buffer
+    );
+    // set texture options
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // now store character for later use
+    Character character = {
+        texture, 
+        glm::ivec2(face->glyph->bitmap.width, face->glyph->bitmap.rows),
+        glm::ivec2(face->glyph->bitmap_left, face->glyph->bitmap_top),
+        face->glyph->advance.x
+    };
+    Characters.insert(std::pair<char, Character>(c, character));
+}
+
+FT_Done_Face(face);
+FT_Done_FreeType(ft);
+
+glGenVertexArrays(1, &VAO);
+glGenBuffers(1, &VBO);
+glBindVertexArray(VAO);
+glBindBuffer(GL_ARRAY_BUFFER, VBO);
+glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 4, NULL, GL_DYNAMIC_DRAW);
+glEnableVertexAttribArray(0);
+glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), 0);
+glBindBuffer(GL_ARRAY_BUFFER, 0);
+glBindVertexArray(0);
+/*
+
+
+
+
+ 
+*/
   // Rendering loop: this code is executed at each frame
   while(!glfwWindowShouldClose(window))
   {
@@ -617,6 +730,14 @@ int main()
       cubeModel.Draw();
       // we set again the depth test to the default operation for the next frame
       glDepthFunc(GL_LESS);
+
+
+      /*std::stringstream stream;
+      stream << std::fixed << std::setprecision(2) << deltaTime;
+      std::string s = stream.str();*/   
+      float dT = deltaTime;
+      RenderText(text_shader, "FPS " + std::to_string((int)(1/dT)), 10.0f, 1050.0f, 0.5f, glm::vec3(0.5, 0.8f, 0.2f));
+      //RenderText(text_shader, "(C) LearnOpenGL.com", 540.0f, 570.0f, 0.5f, glm::vec3(0.3, 0.7f, 0.9f));
 
       // Faccio lo swap tra back e front buffer
       glfwSwapBuffers(window);
@@ -1368,6 +1489,56 @@ void reset(GLint next_room_index){
 
 };
 
+// render line of text
+// -------------------
+void RenderText(Shader &shader, std::string text, float x, float y, float scale, glm::vec3 color)
+{
+    // activate corresponding render state
+    shader.Use();
+    glUniform3f(glGetUniformLocation(shader.Program, "textColor"), color.x, color.y, color.z);
+    glActiveTexture(GL_TEXTURE0);
+    GLint temp;
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &temp);
+    //cout<<temp<<endl;
+    glBindVertexArray(VAO);
+
+    // iterate through all characters
+    std::string::const_iterator c;
+    for (c = text.begin(); c != text.end(); c++) 
+    {
+        Character ch = Characters[*c];
+
+        float xpos = x + ch.Bearing.x * scale;
+        float ypos = y - (ch.Size.y - ch.Bearing.y) * scale;
+
+        float w = ch.Size.x * scale;
+        float h = ch.Size.y * scale;
+        // update VBO for each character
+        float vertices[6][4] = {
+            { xpos,     ypos + h,   0.0f, 0.0f },
+            { xpos,     ypos,       0.0f, 1.0f },
+            { xpos + w, ypos,       1.0f, 1.0f },
+
+            { xpos,     ypos + h,   0.0f, 0.0f },
+            { xpos + w, ypos,       1.0f, 1.0f },
+            { xpos + w, ypos + h,   1.0f, 0.0f }
+        };
+        // render glyph texture over quad
+        glBindTexture(GL_TEXTURE_2D, ch.TextureID);
+        //cout<<ch.TextureID<<endl;
+        // update content of VBO memory
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices); // be sure to use glBufferSubData and not glBufferData
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        // render quad
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        // now advance cursors for next glyph (note that advance is number of 1/64 pixels)
+        x += (ch.Advance >> 6) * scale; // bitshift by 6 to get value in pixels (2^6 = 64 (divide amount of 1/64th pixels by 64 to get amount of pixels))
+    }
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
 
 
 
