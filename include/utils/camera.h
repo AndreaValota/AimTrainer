@@ -68,16 +68,21 @@ public:
 
     //Method used to increase the mouse sensitivity
     void IncreaseCameraSensitivity(){
-            MouseSensitivity += 0.02f;
+            MouseSensitivity += 0.01f;
             cout<< MouseSensitivity <<endl;
     }
 
     //Method used to increase the mouse sensitivity
     void DecreaseCameraSensitivity(){
-        if((MouseSensitivity - 0.02f)>=0.01f){
-            MouseSensitivity -= 0.02f;
+        if((MouseSensitivity - 0.01f)>=0.01f){
+            MouseSensitivity -= 0.01f;
             cout<< MouseSensitivity <<endl;
         }
+    }
+
+    //Method used to return camera sensitivity
+    GLfloat getCameraSensitivity(){
+        return MouseSensitivity;
     }
     
     //////////////////////////////////////////

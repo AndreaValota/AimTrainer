@@ -1,5 +1,7 @@
 // Std. Includes
 #include <string>
+#include <sstream>
+#include <iomanip>
 
 // Loader estensioni OpenGL
 // http://glad.dav1d.de/
@@ -85,6 +87,9 @@ void reset(GLint next_room_index);
 // 2D text renderer function
 void RenderText(Shader &shader, std::string text, float x, float y, float scale, glm::vec3 color);
 
+void increaseScore();
+void resetScore();
+
 // texture unit for the cube map
 GLuint textureCube_room1;
 GLuint textureCube_room2;
@@ -125,7 +130,7 @@ GLboolean wireframe = GL_FALSE;
 glm::mat4 view; 
 
 // we create a camera. We pass the initial position as a parameter to the constructor. In this case, we use a "floating" camera (we pass false as last parameter)
-Camera camera(glm::vec3(0.0f, 0.0f, 9.0f), GL_FALSE);
+Camera camera(glm::vec3(0.0f, 0.0f, 9.0f), GL_TRUE);
 
 // Directional light
 glm::vec3 lightDir0 = glm::vec3(1.0f, 1.0f, 1.0f);
@@ -175,8 +180,8 @@ btRigidBody* target;
 enum room{FIRST, SECOND, THIRD};
 GLint active_room = FIRST;
 
-
-
+// score variable
+GLint score = 0;
 
 // Model and Normal transformation matrices for the objects in the scene: we set to identity
 glm::mat4 objModelMatrix = glm::mat4(1.0f);
@@ -731,13 +736,17 @@ glBindVertexArray(0);
       // we set again the depth test to the default operation for the next frame
       glDepthFunc(GL_LESS);
 
-
-      /*std::stringstream stream;
-      stream << std::fixed << std::setprecision(2) << deltaTime;
-      std::string s = stream.str();*/   
+      //HUD Text Rendering 
       float dT = deltaTime;
-      RenderText(text_shader, "FPS " + std::to_string((int)(1/dT)), 10.0f, 1050.0f, 0.5f, glm::vec3(0.5, 0.8f, 0.2f));
-      //RenderText(text_shader, "(C) LearnOpenGL.com", 540.0f, 570.0f, 0.5f, glm::vec3(0.3, 0.7f, 0.9f));
+      RenderText(text_shader, "FPS " + std::to_string((int)(1/dT)), 10.0f, 1045.0f, 0.6f, glm::vec3(0.0, 1.0f, 0.0f));
+      RenderText(text_shader, "Score " + std::to_string(score), 900.0f, 1045.0f, 0.7f, glm::vec3(0.0, 1.0f, 0.0f));
+      std::stringstream stream;
+      stream << std::fixed << std::setprecision(2) << camera.getCameraSensitivity();
+      std::string sens = stream.str();
+      RenderText(text_shader, "Sens " + sens, 10.0f, 1012.0f, 0.6f, glm::vec3(0.0f, 1.0f, 0.0f));
+      RenderText(text_shader, "ROOM " + std::to_string(active_room+1), 10.0f, 24.0f, 0.6f, glm::vec3(0.0f, 1.0f, 0.0f));
+      
+      
 
       // Faccio lo swap tra back e front buffer
       glfwSwapBuffers(window);
@@ -858,6 +867,10 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
             if (((i-walls_number)<3) && hit_sphere(center, radius, camera.Position)){
                 active_room = i-walls_number;
                 reset(active_room);
+                if(active_room == THIRD){
+                    resetScore();
+                    score--;
+                }
             } 
             if((i-walls_number)==3 && hit_sphere(center, radius, camera.Position)){
                 camera.DecreaseCameraSensitivity();
@@ -877,6 +890,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
                 if(active_targets[i-(walls_number+buttons_number)]){
                     active_targets[i-(walls_number+buttons_number)]=false;
                     active=true;
+                    score++;
                 }
             }
         }
@@ -1455,6 +1469,8 @@ GLint LoadTextureCube(string path)
 //function used to reset rigid bodies and parametes between room changes
 void reset(GLint next_room_index){
 
+    increaseScore();
+
     for(int i=bulletSimulation.dynamicsWorld->getCollisionObjectArray().size()-1;i>=walls_number+buttons_number;i--){
         btCollisionObject* obj = bulletSimulation.dynamicsWorld->getCollisionObjectArray()[i];
 
@@ -1466,6 +1482,7 @@ void reset(GLint next_room_index){
     }
 
     if(next_room_index==FIRST || next_room_index==SECOND){
+        resetScore();
         for(GLint i = 0; i < num_side; i++ )
         {
             for(GLint j = 0; j < num_side; j++ )
@@ -1538,6 +1555,14 @@ void RenderText(Shader &shader, std::string text, float x, float y, float scale,
     }
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void resetScore(){
+    score = 0;
+}
+
+void increaseScore(){
+    score++;
 }
 
 
