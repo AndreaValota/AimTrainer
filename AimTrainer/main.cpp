@@ -80,6 +80,9 @@ void RenderText(Shader &shader, std::string text, float x, float y, float scale,
 void increaseScore();
 void resetScore();
 
+// function used to remove the single target present in room 1 and 3
+void reset_single_target(GLint next_room_index, glm::vec3 new_pos);
+
 
 //////////// VARIABLES INITIALIZATION /////////////
 
@@ -153,9 +156,11 @@ GLboolean hit=true;
 // parametest used to generate the targets rigid bodies (global because they are needed in various functions)
 GLint num_side = 7;
 // total number of the targets
-GLint total_targets = num_side*num_side;
+GLint total_targets = 1;
 // position of the target
 glm::vec3 target_pos;
+// indices used in loops
+GLint i,j;
 // dimension of the target
 glm::vec3 target_size = glm::vec3(0.13f,0.2f,0.2f);
 // target rigidbody
@@ -356,6 +361,8 @@ int main()
     textureID.push_back(LoadTexture("../textures/Rubber_Floor/Rubber_Floor_001_normal.jpg"));
     textureID.push_back(LoadTexture("../textures/Basketball/basketball_basecolor.jpg")); 
     textureID.push_back(LoadTexture("../textures/Basketball/basketball_normal.jpg"));
+    // projectile textures
+    textureID.push_back(LoadTexture("../textures/Projectile/Projectile_basecolor.jpg")); 
 
     // we load the cube map (we pass the path to the folder containing the 6 views)
     textureCube_room1 = LoadTextureCube("../textures/cube/skybox/");
@@ -391,27 +398,10 @@ int main()
     glm::mat4 crossModelMatrix = glm::mat4(1.0f);
     glm::mat3 crossNormalMatrix = glm::mat3(1.0f);
 
-    // we create 49 rigid bodies for the targets.
-    num_side = 7;
-    // total number of the targets
-    total_targets = num_side * num_side;
-    GLint i,j;
-    // dimension of the target
-    target_size = glm::vec3(0.13f,0.2f,0.2f);
-
-    // targets rigidbodies
-    for(i = 0; i < num_side; i++ )
-    {
-        for(j = 0; j < num_side; j++ )
-        {
-            // position of each target in the grid
-            target_pos = glm::vec3((num_side - j*0.5f)-5.5f, (num_side - i*0.5f)-4.5f, 0.7f);
-            target = bulletSimulation.createRigidBody(SPHERE,target_pos,target_size,glm::vec3(0.0f,0.0f,0.0f),1.0f,0.3f,0.3f);
-        }
-    }
+    reset(active_room);
 
     // we set the maximum delta time for the update of the physical simulation
-    GLfloat maxSecPerFrame = 1.0f / 60.0f;
+    GLfloat maxSecPerFrame = 1.0f / 144.0f;
 
 
     /////////////////// CREATION OF BUFFER FOR THE  DEPTH MAP /////////////////////////////////////////
@@ -804,6 +794,44 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS){
 
+        btVector3 impulse;
+        // we need a initial rotation, even if useless for a sphere
+        glm::vec3 rot = glm::vec3(0.0f, 0.0f, 0.0f);
+        glm::vec4 shoot;
+        // initial velocity of the bullet
+        GLfloat shootInitialSpeed = 20.0f;
+        // rigid body of the bullet
+        btRigidBody* sphere;
+        // matrix for the inverse matrix of view and projection
+        glm::mat4 unproject;
+
+        glm::vec3 bullet_size = glm::vec3(0.05f,0.05f,0.05f); 
+        // we create a Rigid Body with mass = 1
+        sphere = bulletSimulation.createRigidBody(SPHERE,camera.Position+camera.Front,bullet_size,rot,0.2f,0.3f,0.3f);
+
+        // we must retro-project the coordinates of the mouse pointer, in order to have a point in world coordinate to be used to determine a vector from the camera (= direction and orientation of the bullet)
+        // we convert the cursor position (taken from the mouse callback) from Viewport Coordinates to Normalized Device Coordinate (= [-1,1] in both coordinates)
+        shoot.x = 0.0f;
+        shoot.y = 0.0f; // Viewport Y coordinates are from top-left corner to the bottom
+        // we need a 3D point, so we set a minimum value to the depth with respect to camera position
+        shoot.z = 1.0f;
+        // w = 1.0 because we are using homogeneous coordinates
+        shoot.w = 1.0f;
+
+        glm::mat4 projection = glm::perspective(45.0f, (float)screenWidth/(float)screenHeight, 0.1f, 10000.0f);
+
+        // we determine the inverse matrix for the projection and view transformations
+        unproject = glm::inverse(projection * view);
+
+        // we convert the position of the cursor from NDC to world coordinates, and we multiply the vector by the initial speed
+        shoot = glm::normalize(unproject * shoot) * shootInitialSpeed;
+
+        // we apply the impulse and shoot the bullet in the scene
+        // N.B.) the graphical aspect of the bullet is treated in the rendering loop
+        impulse = btVector3(shoot.x, shoot.y, shoot.z);
+        sphere->applyCentralImpulse(impulse);
+        sphere->setCollisionFlags(sphere->getCollisionFlags() | btCollisionObject::CF_NO_CONTACT_RESPONSE);
+
         btVector3 temp(0.0f,0.0f,0.0f);
         btScalar radius;
         int num_cobjs = bulletSimulation.dynamicsWorld->getNumCollisionObjects();
@@ -836,13 +864,13 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
             }
         }
 
-        for(int i=walls_number+buttons_number; i<num_cobjs; i++){
+        for(int i=walls_number+buttons_number; i<walls_number+buttons_number+total_targets; i++){
             btCollisionObject* obj = bulletSimulation.dynamicsWorld->getCollisionObjectArray()[i];
             btCollisionShape* shape = obj->getCollisionShape();
             shape->getBoundingSphere(temp, radius);
             glm::vec3 center (obj->getWorldTransform().getOrigin().getX(),obj->getWorldTransform().getOrigin().getY(),obj->getWorldTransform().getOrigin().getZ());
             if (hit_sphere(center, radius, camera.Position)){
-                //cout<< "Colpita sfera " << i <<endl;
+                cout<< "Colpita sfera " << i <<endl;
                 hit=true;
                 if(active_targets[i-(walls_number+buttons_number)]){ // if i hit the active target
                     active_targets[i-(walls_number+buttons_number)] = false;
@@ -1055,12 +1083,11 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
         F0 = 0.9f;
 
         if(hit){
-
-            reset(active_room);
             // we randomize the sphere starting point in the grid
             target_pos = glm::vec3((num_side - (rand()%7)*0.5f)-5.5f, (num_side - (rand()%7)*0.5f)-2.5f, 0.7f);
+            reset_single_target(active_room,target_pos);
             //cout << target_pos.x << " " << target_pos.y << " " << target_pos.z<<endl;
-            target = bulletSimulation.createRigidBody(SPHERE,target_pos,glm::vec3(0.15f,0.2f,0.2f),glm::vec3(0.0f,0.0f,0.0f),1.0f,0.5f,0.9f);
+            //target = bulletSimulation.createRigidBody(SPHERE,target_pos,glm::vec3(0.15f,0.2f,0.2f),glm::vec3(0.0f,0.0f,0.0f),1.0f,0.5f,0.9f);
 
             hit=false;
         }
@@ -1070,8 +1097,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
         {     
             // we point objectModel to the sphere
             objectModel = &sphereModel;
-            obj_size = sphere_size;
-            
+            obj_size = sphere_size; 
    
             // we take the Collision Object from the list
             btCollisionObject* obj = bulletSimulation.dynamicsWorld->getCollisionObjectArray()[i];
@@ -1092,6 +1118,11 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
                 c=false;
             }
 
+            if(i>=walls_number+buttons_number+total_targets){
+                ActivateTexture(18, 2.0f, textureLocation, nMapLocation, repeatLocation, proceduralLocation);
+                obj_size = glm::vec3(0.05f,0.05f,0.05f);
+            }else{
+
             // we change the position of the targets so they periodically move in a specific direction
             btTransform t = body -> getCenterOfMassTransform();
 
@@ -1099,15 +1130,15 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
                 //cout <<"Prima "<< t.getOrigin().getX() <<" "<<t.getOrigin().getY() <<" "<<t.getOrigin().getZ() <<" " << endl;
                 t.setOrigin(t.getOrigin()+btVector3(0.8 * deltaTime * k,0.0f,0.0f));
                 //cout<< "Delta " <<0.5*deltaTime*k<<endl;
-                
             }
 
             body -> setCenterOfMassTransform(t);
             //cout << t.getOrigin().getX() <<" "<<t.getOrigin().getY() <<" "<<t.getOrigin().getZ() <<" " << endl;
-
+            }
 
             // we take the transformation matrix of the rigid boby, as calculated by the physics engine
             transform = body -> getCenterOfMassTransform();
+            
 
             // we convert the Bullet matrix (transform) to an array of floats
             transform.getOpenGLMatrix(matrix);
@@ -1127,6 +1158,10 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
             glUniform1i(glGetUniformLocation(shader.Program, "normalMapping"), GL_TRUE);
             glUniform1i(glGetUniformLocation(shader.Program, "isTarget"), GL_TRUE);
 
+            if(i>=walls_number+buttons_number+total_targets){
+                glUniform1i(glGetUniformLocation(shader.Program, "normalMapping"), GL_FALSE);
+            }
+
             // we render the model
             objectModel->Draw();
             // we "reset" the matrix
@@ -1144,7 +1179,7 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
         F0 = 0.5f;
 
         // we cycle among all rigid bodies avoiding planes, walls and buttons. In the second room all spheres needs to be rendered  
-        for (int i = walls_number + buttons_number; i<num_cobjs; i++)
+        for (int i = walls_number + buttons_number; i<walls_number + buttons_number + total_targets; i++)
         {
             // we activate texture for turned off sphere
             ActivateTexture(4 + active_room * 6, 2.0f, textureLocation, nMapLocation, repeatLocation, proceduralLocation);
@@ -1194,6 +1229,51 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
             glUniform1i(glGetUniformLocation(shader.Program, "isTarget"), GL_FALSE); 
         }
 
+        // we cycle among all rigid bodies avoiding planes, walls and buttons. In the second room all spheres needs to be rendered  
+        for (int i = walls_number + buttons_number + total_targets; i<num_cobjs; i++)
+        {
+            // we activate texture for turned off sphere
+            ActivateTexture(18, 2.0f, textureLocation, nMapLocation, repeatLocation, proceduralLocation);
+
+            // we point objectModel to the sphere
+            objectModel = &sphereModel;
+            obj_size = glm::vec3(0.05f,0.05f,0.05f);;
+          
+            // we take the Collision Object from the list
+            btCollisionObject* obj = bulletSimulation.dynamicsWorld->getCollisionObjectArray()[i];
+
+            // we upcast it in order to use the methods of the main class RigidBody
+            btRigidBody* body = btRigidBody::upcast(obj);
+
+            // we take the transformation matrix of the rigid boby, as calculated by the physics engine
+            body->getMotionState()->getWorldTransform(transform);
+
+            // we convert the Bullet matrix (transform) to an array of floats
+            transform.getOpenGLMatrix(matrix);
+
+            // we reset to identity at each frame
+            objModelMatrix = glm::mat4(1.0f);
+            objNormalMatrix = glm::mat3(1.0f);
+
+            // we create the GLM transformation matrix
+            // 1) we convert the array of floats to a GLM mat4 (using make_mat4 method)
+            // 2) Bullet matrix provides rotations and translations: it does not consider scale (usually the Collision Shape is generated using directly the scaled dimensions). If, like in our case, we have applied a scale to the original model, we need to multiply the scale to the rototranslation matrix created in 1). If we are working on an imported and not scaled model, we do not need to do this
+            objModelMatrix = glm::make_mat4(matrix) * glm::scale(objModelMatrix, obj_size);
+            // we create the normal matrix
+            objNormalMatrix = glm::inverseTranspose(glm::mat3(view*objModelMatrix));
+            glUniformMatrix4fv(glGetUniformLocation(shader.Program, "modelMatrix"), 1, GL_FALSE, glm::value_ptr(objModelMatrix));
+            glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(objNormalMatrix));
+            glUniform1i(glGetUniformLocation(shader.Program, "normalMapping"), GL_FALSE);
+            glUniform1i(glGetUniformLocation(shader.Program, "isTarget"), GL_TRUE);
+
+            // we render the model
+            objectModel->Draw();
+
+            // we "reset" the matrix
+            objModelMatrix = glm::mat4(1.0f);
+            glUniform1i(glGetUniformLocation(shader.Program, "isTarget"), GL_FALSE); 
+        }
+
         break;
 
     case THIRD:
@@ -1206,10 +1286,11 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
 
         if(hit){
 
-            reset(active_room);
             // we randomize the sphere starting point in the grid
             target_pos = glm::vec3((num_side - (rand()%7)*0.5f)-5.5f, (num_side - (rand()%7)*0.5f)-2.5f, 0.7f);
-            target = bulletSimulation.createRigidBody(SPHERE,target_pos,glm::vec3(0.15f,0.2f,0.2f),glm::vec3(0.0f,0.0f,0.0f),1.0f,0.5f,0.9f);
+            //target = bulletSimulation.createRigidBody(SPHERE,target_pos,glm::vec3(0.15f,0.2f,0.2f),glm::vec3(0.0f,0.0f,0.0f),1.0f,0.5f,0.9f);
+
+            reset_single_target(active_room,target_pos);
 
             // we apply the impulse and shoot the bullet in the scene
             GLfloat shootInitialSpeed = 7.0f;
@@ -1226,6 +1307,11 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
             // we point objectModel to the cube
             objectModel = &sphereModel;
             obj_size = sphere_size;
+
+            if(i>=walls_number+buttons_number+total_targets){
+                ActivateTexture(18, 2.0f, textureLocation, nMapLocation, repeatLocation, proceduralLocation);
+                obj_size = glm::vec3(0.05f,0.05f,0.05f);
+            }
 
             // we take the Collision Object from the list
             btCollisionObject* obj = bulletSimulation.dynamicsWorld->getCollisionObjectArray()[i];
@@ -1251,6 +1337,10 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
             glUniformMatrix3fv(glGetUniformLocation(shader.Program, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(objNormalMatrix));
             glUniform1i(glGetUniformLocation(shader.Program, "normalMapping"), GL_TRUE);
             glUniform1i(glGetUniformLocation(shader.Program, "isTarget"), GL_TRUE);
+
+            if(i>=walls_number+buttons_number+total_targets){
+                glUniform1i(glGetUniformLocation(shader.Program, "normalMapping"), GL_FALSE);
+            }
 
             // we render the model
             objectModel->Draw();
@@ -1436,7 +1526,6 @@ GLint LoadTextureCube(string path)
 // function used to reset rigid bodies and parametes at room swap
 void reset(GLint next_room_index){
 
-    increaseScore();
     bulletSimulation.dynamicsWorld->setGravity(btVector3(0.0f,-9.82f,0.0f));
 
     for(int i=bulletSimulation.dynamicsWorld->getCollisionObjectArray().size()-1; i>=walls_number+buttons_number; i--){
@@ -1449,9 +1538,17 @@ void reset(GLint next_room_index){
 
     if (next_room_index == FIRST){
         bulletSimulation.dynamicsWorld->setGravity(btVector3(0.0f,0.0f,0.0f));
+        target_pos = glm::vec3((num_side - (rand()%7)*0.5f)-5.5f, (num_side - (rand()%7)*0.5f)-2.5f, 0.7f);
+        target = bulletSimulation.createRigidBody(SPHERE,target_pos,target_size,glm::vec3(0.0f,0.0f,0.0f),0.001f,0.3f,0.3f);
+    }
+
+    if (next_room_index == THIRD){
+        target_pos = glm::vec3((num_side - (rand()%7)*0.5f)-5.5f, (num_side - (rand()%7)*0.5f)-2.5f, 0.7f);
+        target = bulletSimulation.createRigidBody(SPHERE,target_pos,target_size,glm::vec3(0.0f,0.0f,0.0f),1.0f,0.5f,0.9f);
     }
 
     if(next_room_index == SECOND){
+        total_targets = num_side*num_side;
         bulletSimulation.dynamicsWorld->setGravity(btVector3(0.0f,0.0f,0.0f));
 
         resetScore();
@@ -1469,6 +1566,7 @@ void reset(GLint next_room_index){
     }
 
     if(next_room_index == FIRST || next_room_index == THIRD){
+        total_targets = 1;
         hit = true;
         pointLightColor=glm::vec3(0.0f,0.0f,0.0f); // we turn off the point light in first and third room
     }else{
@@ -1535,4 +1633,18 @@ void resetScore(){
 // function used to increase the score
 void increaseScore(){
     score++;
+}
+
+// function used to remove the single target present in room 1 and 3
+void reset_single_target(GLint next_room_index, glm::vec3 new_pos){
+
+    btCollisionObject* obj = bulletSimulation.dynamicsWorld->getCollisionObjectArray()[10];
+    // we upcast it in order to use the methods of the main class RigidBody
+    btRigidBody* body = btRigidBody::upcast(obj);
+
+    btTransform t = body -> getCenterOfMassTransform();
+    t.setOrigin(btVector3(new_pos.x,new_pos.y,new_pos.z));
+    body -> setCenterOfMassTransform(t);
+
+    increaseScore();
 }
