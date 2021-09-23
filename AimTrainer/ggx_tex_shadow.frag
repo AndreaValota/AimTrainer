@@ -240,11 +240,11 @@ vec4 noise() {
     vel = vec2(cos(a),sin(a));
     DF += snoise(pos+vel)*.25+.25;
 
-    color = vec3(smoothstep(.7,.75,fract(DF)))*vec3(256/256f,110/256f,15/256f);
+    color = vec3(smoothstep(.7,.75,fract(DF)))*vec3(256.0/256,110.0/256,15.0/256);
     if (smoothstep(.7,.75,fract(DF))==1.0){
         result = vec4(color,1.0);
     }else{
-        result = vec4(1.0-color,1.0)*vec4(69/256f,96/256f,165/256f,1.0f);
+        result = vec4(1.0-color,1.0)*vec4(69.0/256,96.0/256,165.0/256,1.0);
     }
     return result;
 }
