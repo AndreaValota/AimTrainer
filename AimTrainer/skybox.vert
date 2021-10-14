@@ -25,7 +25,7 @@ void main()
 		interp_UVW = position;
 
 		// we apply the transformations to the vertex
-    vec4 pos = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0);
+    	vec4 pos = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0);
 		// we want to set the Z coordinate of the projected vertex at the maximum depth so we set Z equal to W (because in the projection divide, after clipping, all the components will be divided by W).
 		gl_Position = pos.xyww;
 }

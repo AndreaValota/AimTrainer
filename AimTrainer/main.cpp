@@ -1123,17 +1123,17 @@ void RenderObjects(Shader &shader, Model &cubeModel, Model &sphereModel, GLint r
                 obj_size = glm::vec3(0.05f,0.05f,0.05f);
             }else{
 
-            // we change the position of the targets so they periodically move in a specific direction
-            btTransform t = body -> getCenterOfMassTransform();
+                // we change the position of the targets so they periodically move in a specific direction
+                btTransform t = body -> getCenterOfMassTransform();
 
-            if(deltaTime<1.2f){
-                //cout <<"Prima "<< t.getOrigin().getX() <<" "<<t.getOrigin().getY() <<" "<<t.getOrigin().getZ() <<" " << endl;
-                t.setOrigin(t.getOrigin()+btVector3(0.8 * deltaTime * k,0.0f,0.0f));
-                //cout<< "Delta " <<0.5*deltaTime*k<<endl;
-            }
+                if(deltaTime<1.2f){
+                    //cout <<"Prima "<< t.getOrigin().getX() <<" "<<t.getOrigin().getY() <<" "<<t.getOrigin().getZ() <<" " << endl;
+                    t.setOrigin(t.getOrigin()+btVector3(0.8 * deltaTime * k,0.0f,0.0f));
+                    //cout<< "Delta " <<0.5*deltaTime*k<<endl;
+                }
 
-            body -> setCenterOfMassTransform(t);
-            //cout << t.getOrigin().getX() <<" "<<t.getOrigin().getY() <<" "<<t.getOrigin().getZ() <<" " << endl;
+                body -> setCenterOfMassTransform(t);
+                //cout << t.getOrigin().getX() <<" "<<t.getOrigin().getY() <<" "<<t.getOrigin().getZ() <<" " << endl;
             }
 
             // we take the transformation matrix of the rigid boby, as calculated by the physics engine
