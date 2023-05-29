@@ -17,3 +17,8 @@ These files need to be put inside a "libs" folder.
 * LinearMath.lib
 * minizip.lib
 * zlib.lib
+
+
+# Example
+
+![GameplayExample](https://github.com/AndreaValota/AimTrainer/blob/main/Gif/RTGP_example.gif)
